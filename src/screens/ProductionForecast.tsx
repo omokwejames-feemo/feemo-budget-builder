@@ -1,35 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, Timeline, getDeptTarget, getTotalMonths, getMonthLabel, getMonthPhase } from '../store/budgetStore'
-
-const DEPT_ACTIVE_PHASES: Partial<Record<DeptCode, string[]>> = {
-  A:  ['DEV'],
-  B:  ['DEV', 'PRE-PROD'],
-  C:  ['DEV', 'PRE-PROD', 'SHOOT'],
-  D:  ['PRE-PROD', 'SHOOT'],
-  E:  ['SHOOT'],
-  F:  ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
-  G:  ['PRE-PROD', 'SHOOT'],
-  H:  ['SHOOT'],
-  I:  ['SHOOT'],
-  J:  ['PRE-PROD', 'SHOOT'],
-  K:  ['PRE-PROD', 'SHOOT'],
-  L:  ['PRE-PROD', 'SHOOT'],
-  M:  ['PRE-PROD', 'SHOOT'],
-  N:  ['PRE-PROD', 'SHOOT'],
-  O:  ['SHOOT'],
-  P:  ['SHOOT'],
-  Q:  ['PRE-PROD', 'SHOOT'],
-  R:  ['PRE-PROD', 'SHOOT', 'POST'],
-  S:  ['PRE-PROD', 'SHOOT', 'POST'],
-  T:  ['SHOOT'],
-  AA: ['SHOOT'],
-  DD: ['POST'],
-  EE: ['POST'],
-  FF: ['POST'],
-  GG: ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
-  HH: ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
-  II: ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
-}
+import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, Timeline, getDeptTarget, getTotalMonths, getMonthLabel, getMonthPhase, DEPT_ACTIVE_PHASES } from '../store/budgetStore'
+import { Issue } from '../hooks/useIssueDetector'
 
 function fmtN(n: number, cur = 'N', brackets = false) {
   if (n === 0) return '—'
@@ -131,7 +102,7 @@ function EditableForecastCell({ value, onSave, cur }: { value: number; onSave: (
   )
 }
 
-export default function ProductionForecast() {
+export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }) {
   const store = useBudgetStore()
   const { timeline, project, installments, salaryRoles, forecastOverrides, setForecastOverride, setInstallments } = store
   const totalMonths = getTotalMonths(timeline)
@@ -247,6 +218,20 @@ export default function ProductionForecast() {
           </div>
         </div>
       </div>
+
+      {issues.map(issue => (
+        <div key={issue.id} style={{
+          padding: '10px 14px', borderRadius: 8, marginBottom: 10,
+          background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.3)',
+          display: 'flex', alignItems: 'flex-start', gap: 8,
+        }}>
+          <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>⚠</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 3 }}>{issue.title}</div>
+            <div style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.5 }}>{issue.description}</div>
+          </div>
+        </div>
+      ))}
 
       {hasDeficit && (
         <div style={{ background: 'rgba(231,76,60,0.12)', border: '1px solid rgba(231,76,60,0.4)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

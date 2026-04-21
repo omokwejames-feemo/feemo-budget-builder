@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-project-to', { data, defaultName }),
   openProject: () =>
     ipcRenderer.invoke('open-project'),
+  readFileByPath: (filePath: string) =>
+    ipcRenderer.invoke('read-file-by-path', filePath),
 
   // ── Updates ──────────────────────────────────────────────────────────────
   getAppVersion: () =>

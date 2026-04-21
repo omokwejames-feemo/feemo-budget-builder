@@ -5,7 +5,7 @@ interface FileScreenProps {
   hasUnsavedChanges: boolean
   onSave: () => void
   onSaveAs: () => Promise<void>
-  onOpen: () => Promise<void>
+  onOpen: () => void | Promise<void>
   onClose: () => void
 }
 

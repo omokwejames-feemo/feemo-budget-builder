@@ -116,8 +116,8 @@ export interface BudgetState {
 }
 
 const defaultProject: ProjectDetails = {
-  title: 'Ajoche',
-  company: 'Feemovision',
+  title: '',
+  company: '',
   totalBudget: 0,
   format: 'Feature Film',
   duration: 90,
@@ -281,6 +281,36 @@ export function isAutofillReady(
 }
 
 // Department % allocations derived from reference budget files
+export const DEPT_ACTIVE_PHASES: Partial<Record<DeptCode, string[]>> = {
+  A:  ['DEV'],
+  B:  ['DEV', 'PRE-PROD'],
+  C:  ['DEV', 'PRE-PROD', 'SHOOT'],
+  D:  ['PRE-PROD', 'SHOOT'],
+  E:  ['SHOOT'],
+  F:  ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
+  G:  ['PRE-PROD', 'SHOOT'],
+  H:  ['SHOOT'],
+  I:  ['SHOOT'],
+  J:  ['PRE-PROD', 'SHOOT'],
+  K:  ['PRE-PROD', 'SHOOT'],
+  L:  ['PRE-PROD', 'SHOOT'],
+  M:  ['PRE-PROD', 'SHOOT'],
+  N:  ['PRE-PROD', 'SHOOT'],
+  O:  ['SHOOT'],
+  P:  ['SHOOT'],
+  Q:  ['PRE-PROD', 'SHOOT'],
+  R:  ['PRE-PROD', 'SHOOT', 'POST'],
+  S:  ['PRE-PROD', 'SHOOT', 'POST'],
+  T:  ['SHOOT'],
+  AA: ['SHOOT'],
+  DD: ['POST'],
+  EE: ['POST'],
+  FF: ['POST'],
+  GG: ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
+  HH: ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
+  II: ['DEV', 'PRE-PROD', 'SHOOT', 'POST'],
+}
+
 export const TEMPLATE_JURIYA: Partial<Record<DeptCode, number>> = {
   A: 0, B: 3, C: 5, D: 2, E: 8, F: 3.5,
   G: 8.9, H: 1.5, I: 2, J: 1.5, K: 8.9,

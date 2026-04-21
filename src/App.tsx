@@ -8,6 +8,10 @@ import ProductionForecast from './screens/ProductionForecast'
 import ExportScreen from './screens/ExportScreen'
 import FileScreen from './screens/FileScreen'
 import AboutScreen from './screens/AboutScreen'
+import UpdateDialog from './components/UpdateDialog'
+import OpenProjectDialog from './components/OpenProjectDialog'
+import { useRecentProjects } from './hooks/useRecentProjects'
+import { useIssueDetector } from './hooks/useIssueDetector'
 import './App.css'
 
 type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'export' | 'file' | 'about'
@@ -22,23 +26,46 @@ const NAV: { id: Screen; label: string; icon: string }[] = [
   { id: 'about',       label: 'About',              icon: 'ℹ'  },
 ]
 
+interface PendingUpdate {
+  version: string
+  current: string
+  body: string
+  assetUrl: string
+  assetSize: number
+  releasePageUrl: string
+}
+
 export default function App() {
   const [appView, setAppView] = useState<'home' | 'app'>('home')
   const [screen, setScreen] = useState<Screen>('assumptions')
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('')
-  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null)
   const [saveToast, setSaveToast] = useState(false)
+  const [showOpenDialog, setShowOpenDialog] = useState(false)
 
   const store = useBudgetStore()
   const isFirstMount = useRef(true)
+  const { recents, addRecent, removeRecent } = useRecentProjects()
+  const issues = useIssueDetector()
 
-  // Fetch version and silently check for updates on first load
+  // Silent background check on launch
   useEffect(() => {
     window.electronAPI?.getAppVersion().then(v => setAppVersion(v)).catch(() => {})
     window.electronAPI?.checkForUpdates()
-      .then(r => { if (r.success && r.hasUpdate) setUpdateAvailable(true) })
+      .then(r => {
+        if (r.success && r.hasUpdate) {
+          setPendingUpdate({
+            version: r.latest,
+            current: r.current,
+            body: r.body ?? '',
+            assetUrl: r.assetUrl,
+            assetSize: r.assetSize,
+            releasePageUrl: r.releasePageUrl,
+          })
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -50,6 +77,20 @@ export default function App() {
       setHasUnsavedChanges(true)
     })
     return unsub
+  }, [appView])
+
+  // Cmd+S / Ctrl+S global save shortcut
+  useEffect(() => {
+    if (appView !== 'app') return
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appView])
 
   function getSerializableState() {
@@ -74,7 +115,12 @@ export default function App() {
     setAppView('app')
   }
 
-  async function handleOpenProject() {
+  function handleOpenProject() {
+    setShowOpenDialog(true)
+  }
+
+  async function doBrowseAndOpen() {
+    setShowOpenDialog(false)
     if (!window.electronAPI) return
     const result = await window.electronAPI.openProject()
     if (!result.success || !result.data || !result.filePath) return
@@ -82,24 +128,45 @@ export default function App() {
       const parsed = JSON.parse(result.data)
       store.loadState(parsed)
       setCurrentFilePath(result.filePath)
+      addRecent(result.filePath)
       setHasUnsavedChanges(false)
       isFirstMount.current = true
       setScreen('assumptions')
       setAppView('app')
     } catch {
-      // malformed file — ignore
+      // malformed file
     }
   }
 
-  // Save: writes to app-internal localStorage (Zustand persist already does this automatically).
-  // Shows a brief "Saved" toast to confirm. No dialog, no file path needed.
+  async function doOpenRecent(filePath: string) {
+    setShowOpenDialog(false)
+    if (!window.electronAPI) return
+    const result = await window.electronAPI.readFileByPath(filePath)
+    if (!result.success || !result.data) {
+      // File may have been moved — fall back to native dialog
+      await doBrowseAndOpen()
+      return
+    }
+    try {
+      const parsed = JSON.parse(result.data)
+      store.loadState(parsed)
+      setCurrentFilePath(filePath)
+      addRecent(filePath)
+      setHasUnsavedChanges(false)
+      isFirstMount.current = true
+      setScreen('assumptions')
+      setAppView('app')
+    } catch {
+      // malformed file
+    }
+  }
+
   function handleSave() {
     setHasUnsavedChanges(false)
     setSaveToast(true)
     setTimeout(() => setSaveToast(false), 2000)
   }
 
-  // Save As: exports the project to a user-chosen .feemo file via OS dialog.
   async function handleSaveAs() {
     if (!window.electronAPI) return
     const data = getSerializableState()
@@ -107,6 +174,7 @@ export default function App() {
     const result = await window.electronAPI.saveProjectTo(data, `${title}.feemo`)
     if (result.success && result.filePath) {
       setCurrentFilePath(result.filePath)
+      addRecent(result.filePath)
       setHasUnsavedChanges(false)
     }
   }
@@ -120,8 +188,30 @@ export default function App() {
     setHasUnsavedChanges(false)
   }
 
+  const assumptionIssues = issues.filter(i => i.screen === 'timeline' || i.screen === 'installments')
+  const forecastIssues = issues.filter(i => i.screen === 'forecast')
+  const hasAssumptionErrors = assumptionIssues.some(i => i.severity === 'error')
+  const hasForecastWarnings = forecastIssues.length > 0
+  const updateAvailable = pendingUpdate !== null
+
   if (appView === 'home') {
-    return <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} />
+    return (
+      <>
+        <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} recents={recents} onOpenRecent={doOpenRecent} />
+        {showOpenDialog && (
+          <OpenProjectDialog
+            recents={recents}
+            onOpenRecent={doOpenRecent}
+            onBrowse={doBrowseAndOpen}
+            onRemoveRecent={removeRecent}
+            onDismiss={() => setShowOpenDialog(false)}
+          />
+        )}
+        {pendingUpdate && (
+          <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
+        )}
+      </>
+    )
   }
 
   const fileName = currentFilePath ? currentFilePath.split('/').pop() : null
@@ -161,6 +251,12 @@ export default function App() {
               {item.id === 'file' && hasUnsavedChanges && (
                 <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
               )}
+              {item.id === 'assumptions' && hasAssumptionErrors && (
+                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--red)', flexShrink: 0 }} />
+              )}
+              {item.id === 'forecast' && hasForecastWarnings && (
+                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+              )}
               {item.id === 'about' && updateAvailable && (
                 <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />
               )}
@@ -174,10 +270,10 @@ export default function App() {
       </aside>
 
       <main className="content">
-        {screen === 'assumptions' && <AssumptionsDashboard />}
+        {screen === 'assumptions' && <AssumptionsDashboard issues={assumptionIssues} />}
         {screen === 'budget'      && <ProductionBudget />}
         {screen === 'salary'      && <SalaryForecast />}
-        {screen === 'forecast'    && <ProductionForecast />}
+        {screen === 'forecast'    && <ProductionForecast issues={forecastIssues} />}
         {screen === 'export'      && <ExportScreen />}
         {screen === 'about'       && <AboutScreen />}
         {screen === 'file' && (
@@ -191,6 +287,20 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Modals */}
+      {showOpenDialog && (
+        <OpenProjectDialog
+          recents={recents}
+          onOpenRecent={doOpenRecent}
+          onBrowse={doBrowseAndOpen}
+          onRemoveRecent={removeRecent}
+          onDismiss={() => setShowOpenDialog(false)}
+        />
+      )}
+      {pendingUpdate && (
+        <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
+      )}
 
       {/* Quick-save toast */}
       {saveToast && (

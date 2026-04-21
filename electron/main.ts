@@ -137,6 +137,15 @@ ipcMain.handle('open-project', async () => {
   return { success: true, filePath: filePaths[0], data }
 })
 
+ipcMain.handle('read-file-by-path', async (_event, filePath: string) => {
+  try {
+    const data = await readFileAsync(filePath, 'utf-8')
+    return { success: true, filePath, data }
+  } catch (err) {
+    return { success: false, error: String(err) }
+  }
+})
+
 // ── Update IPC ────────────────────────────────────────────────────────────────
 
 ipcMain.handle('get-app-version', () => app.getVersion())
@@ -170,12 +179,13 @@ ipcMain.handle('check-for-updates', async () => {
       if (exe) { assetUrl = exe.browser_download_url; assetSize = exe.size }
     }
 
-    return { success: true, current, latest, hasUpdate, releasePageUrl, assetUrl, assetSize }
+    const body = (json.body as string) ?? ''
+    return { success: true, current, latest, hasUpdate, releasePageUrl, assetUrl, assetSize, body }
   } catch (err) {
     return {
       success: false, error: String(err), current, latest: current,
       hasUpdate: false, releasePageUrl: `https://github.com/${GITHUB_REPO}/releases/latest`,
-      assetUrl: '', assetSize: 0,
+      assetUrl: '', assetSize: 0, body: '',
     }
   }
 })

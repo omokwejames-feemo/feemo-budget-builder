@@ -9,6 +9,7 @@ import {
 import { JURIYA_FULL, BC_FULL } from '../export/templateData'
 import { applyFullTemplate, applyParsedBudget } from '../export/applyTemplate'
 import { parseUploadedBudget } from '../export/parseUploadedBudget'
+import { Issue } from '../hooks/useIssueDetector'
 
 const CURRENCIES = [
   { value: '₦', label: '₦  NGN — Nigerian Naira', foreign: false },
@@ -22,7 +23,38 @@ function fmt(n: number, currency = '₦') {
   return `${sym}${n.toLocaleString()}`
 }
 
-export default function AssumptionsDashboard() {
+function IssueCard({ issue }: { issue: Issue }) {
+  return (
+    <div style={{
+      padding: '10px 14px', borderRadius: 8, marginBottom: 8,
+      background: issue.severity === 'error' ? 'rgba(231,76,60,0.08)' : 'rgba(245,166,35,0.08)',
+      border: `1px solid ${issue.severity === 'error' ? 'rgba(231,76,60,0.3)' : 'rgba(245,166,35,0.3)'}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>
+          {issue.severity === 'error' ? '✕' : '⚠'}
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700,
+            color: issue.severity === 'error' ? 'var(--red)' : 'var(--accent)',
+            marginBottom: 3,
+          }}>{issue.title}</div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.5 }}>{issue.description}</div>
+          {issue.fixLabel && issue.onFix && (
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ marginTop: 8, fontSize: 11, padding: '3px 10px' }}
+              onClick={issue.onFix}
+            >{issue.fixLabel}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[] }) {
   const {
     project, setProject,
     timeline, setTimeline,
@@ -398,6 +430,9 @@ export default function AssumptionsDashboard() {
           </div>
         </div>
         <div className="card-body">
+          {issues.filter(i => i.screen === 'timeline').map(issue => (
+            <IssueCard key={issue.id} issue={issue} />
+          ))}
           <div className="form-grid form-grid-4">
             {[
               { key: 'developmentMonths', label: 'Development (months)', phase: 'dev' },
@@ -451,6 +486,9 @@ export default function AssumptionsDashboard() {
           </div>
         </div>
         <div className="card-body">
+          {issues.filter(i => i.screen === 'installments').map(issue => (
+            <IssueCard key={issue.id} issue={issue} />
+          ))}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 70px 2fr 60px 80px auto', gap: '8px', marginBottom: 8 }}>
             {['Label', '%', 'Trigger / Milestone', 'Month', 'Amount', ''].map(h => (
               <div key={h} style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', paddingBottom: 4 }}>{h}</div>
