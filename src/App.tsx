@@ -7,18 +7,19 @@ import SalaryForecast from './screens/SalaryForecast'
 import ProductionForecast from './screens/ProductionForecast'
 import ExportScreen from './screens/ExportScreen'
 import FileScreen from './screens/FileScreen'
+import AboutScreen from './screens/AboutScreen'
 import './App.css'
 
-type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'export' | 'file'
-
+type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'export' | 'file' | 'about'
 
 const NAV: { id: Screen; label: string; icon: string }[] = [
-  { id: 'assumptions', label: 'Assumptions', icon: '⚙' },
-  { id: 'budget', label: 'Production Budget', icon: '₦' },
-  { id: 'salary', label: 'Salary Forecast', icon: '👥' },
-  { id: 'forecast', label: 'Production Forecast', icon: '📈' },
-  { id: 'export', label: 'Export', icon: '↓' },
-  { id: 'file', label: 'File', icon: '🗂' },
+  { id: 'assumptions', label: 'Assumptions',        icon: '⚙'  },
+  { id: 'budget',      label: 'Production Budget',  icon: '₦'  },
+  { id: 'salary',      label: 'Salary Forecast',    icon: '👥' },
+  { id: 'forecast',    label: 'Production Forecast',icon: '📈' },
+  { id: 'export',      label: 'Export',             icon: '↓'  },
+  { id: 'file',        label: 'File',               icon: '🗂' },
+  { id: 'about',       label: 'About',              icon: 'ℹ'  },
 ]
 
 export default function App() {
@@ -26,9 +27,19 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('assumptions')
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [appVersion, setAppVersion] = useState<string>('')
+  const [updateAvailable, setUpdateAvailable] = useState(false)
 
   const store = useBudgetStore()
   const isFirstMount = useRef(true)
+
+  // Fetch version and silently check for updates on first load
+  useEffect(() => {
+    window.electronAPI?.getAppVersion().then(v => setAppVersion(v)).catch(() => {})
+    window.electronAPI?.checkForUpdates()
+      .then(r => { if (r.success && r.hasUpdate) setUpdateAvailable(true) })
+      .catch(() => {})
+  }, [])
 
   // Track unsaved changes whenever store state mutates
   useEffect(() => {
@@ -114,9 +125,7 @@ export default function App() {
     return <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} />
   }
 
-  const fileName = currentFilePath
-    ? currentFilePath.split('/').pop()
-    : null
+  const fileName = currentFilePath ? currentFilePath.split('/').pop() : null
 
   return (
     <div className="app">
@@ -153,17 +162,25 @@ export default function App() {
               {item.id === 'file' && hasUnsavedChanges && (
                 <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
               )}
+              {item.id === 'about' && updateAvailable && (
+                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />
+              )}
             </button>
           ))}
         </nav>
-        <div className="sidebar-footer">v1.0 · Feemovision</div>
+
+        <div className="sidebar-footer">
+          {appVersion ? `v${appVersion}` : 'v1.0.0'} · Feemovision
+        </div>
       </aside>
+
       <main className="content">
         {screen === 'assumptions' && <AssumptionsDashboard />}
-        {screen === 'budget' && <ProductionBudget />}
-        {screen === 'salary' && <SalaryForecast />}
-        {screen === 'forecast' && <ProductionForecast />}
-        {screen === 'export' && <ExportScreen />}
+        {screen === 'budget'      && <ProductionBudget />}
+        {screen === 'salary'      && <SalaryForecast />}
+        {screen === 'forecast'    && <ProductionForecast />}
+        {screen === 'export'      && <ExportScreen />}
+        {screen === 'about'       && <AboutScreen />}
         {screen === 'file' && (
           <FileScreen
             currentFilePath={currentFilePath}

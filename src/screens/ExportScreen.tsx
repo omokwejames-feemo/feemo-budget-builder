@@ -14,6 +14,16 @@ declare global {
       saveProject: (data: string, filePath: string) => Promise<{ success: boolean; filePath?: string }>
       saveProjectTo: (data: string, defaultName: string) => Promise<{ success: boolean; filePath?: string }>
       openProject: () => Promise<{ success: boolean; filePath?: string; data?: string }>
+      getAppVersion: () => Promise<string>
+      checkForUpdates: () => Promise<{
+        success: boolean
+        error?: string
+        current: string
+        latest: string
+        hasUpdate: boolean
+        downloadUrl: string
+      }>
+      openExternal: (url: string) => Promise<void>
     }
   }
 }

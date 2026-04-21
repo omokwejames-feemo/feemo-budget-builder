@@ -9,4 +9,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-project-to', { data, defaultName }),
   openProject: () =>
     ipcRenderer.invoke('open-project'),
+  getAppVersion: () =>
+    ipcRenderer.invoke('get-app-version'),
+  checkForUpdates: () =>
+    ipcRenderer.invoke('check-for-updates'),
+  openExternal: (url: string) =>
+    ipcRenderer.invoke('open-external', url),
 })
