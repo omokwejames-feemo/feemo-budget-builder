@@ -109,6 +109,9 @@ export interface BudgetState {
   setForecastOverride: (key: string, value: number) => void
   clearForecastOverrides: () => void
   resetStore: () => void
+  resetTimeline: () => void
+  resetInstallments: () => void
+  resetDeptAllocations: () => void
   loadState: (state: Partial<Pick<BudgetState, 'project' | 'timeline' | 'installments' | 'deptAllocations' | 'lineItems' | 'salaryRoles' | 'forecastOverrides'>>) => void
 }
 
@@ -131,21 +134,17 @@ const defaultProject: ProjectDetails = {
 }
 
 const defaultTimeline: Timeline = {
-  developmentMonths: 1,
-  preProdMonths: 3,
-  shootMonths: 1,
-  postMonths: 4,
+  developmentMonths: 0,
+  preProdMonths: 0,
+  shootMonths: 0,
+  postMonths: 0,
 }
 
 const defaultAllocations = Object.fromEntries(
   DEPARTMENTS.map(d => [d.code, 0])
 ) as Record<DeptCode, number>
 
-const defaultInstallments: Installment[] = [
-  { id: '1', label: '1st — Development', percentage: 10, trigger: 'Before Development Begins', month: 1 },
-  { id: '2', label: '2nd — Production', percentage: 80, trigger: 'Development Approved / Film Greenlit', month: 2 },
-  { id: '3', label: '3rd — Post', percentage: 10, trigger: 'Delivery of Rough Cut / Picture Lock', month: 6 },
-]
+const defaultInstallments: Installment[] = []
 
 const initialState = {
   project: defaultProject,
@@ -195,6 +194,9 @@ export const useBudgetStore = create<BudgetState>()(
         set(s => ({ forecastOverrides: { ...s.forecastOverrides, [key]: value } })),
       clearForecastOverrides: () => set({ forecastOverrides: {} }),
       resetStore: () => set(initialState),
+      resetTimeline: () => set({ timeline: defaultTimeline }),
+      resetInstallments: () => set({ installments: [] }),
+      resetDeptAllocations: () => set({ deptAllocations: defaultAllocations }),
       loadState: (state) => set({ ...initialState, ...state }),
     }),
     {

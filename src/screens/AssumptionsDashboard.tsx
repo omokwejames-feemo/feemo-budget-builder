@@ -28,7 +28,7 @@ export default function AssumptionsDashboard() {
     timeline, setTimeline,
     installments, setInstallments,
     deptAllocations, setDeptAllocation,
-    resetStore,
+    resetStore, resetTimeline, resetInstallments, resetDeptAllocations,
   } = useBudgetStore()
 
   const [autofillConfirm, setAutofillConfirm] = useState<'juriya' | 'bc' | null>(null)
@@ -389,6 +389,11 @@ export default function AssumptionsDashboard() {
           <span className="card-title">Production Timeline</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 12, color: 'var(--text2)' }}>Total: <strong style={{ color: 'var(--accent)' }}>{totalMonths} months</strong></span>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 11, color: 'var(--text3)' }}
+              onClick={() => { if (confirm('Reset Production Timeline to empty?')) resetTimeline() }}
+            >Reset</button>
             {sectionMark(timelineComplete)}
           </div>
         </div>
@@ -437,6 +442,11 @@ export default function AssumptionsDashboard() {
           <span className="card-title">Funding Installments</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button className="btn btn-ghost btn-sm" onClick={addInstallment}>+ Add</button>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 11, color: 'var(--text3)' }}
+              onClick={() => { if (installments.length === 0 || confirm('Remove all installments?')) resetInstallments() }}
+            >Reset</button>
             {sectionMark(instComplete)}
           </div>
         </div>
@@ -474,7 +484,14 @@ export default function AssumptionsDashboard() {
       <div className="card">
         <div className="card-header">
           <span className="card-title">Department % Allocations</span>
-          <span style={{ fontSize: 11, color: 'var(--text2)' }}>Sets budget target for every department</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 11, color: 'var(--text2)' }}>Sets budget target for every department</span>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 11, color: 'var(--text3)' }}
+              onClick={() => { if (confirm('Reset all department allocations to 0%?')) resetDeptAllocations() }}
+            >Reset</button>
+          </div>
         </div>
         <div className="card-body">
           <div className="allocation-grid">

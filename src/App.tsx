@@ -29,6 +29,7 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('')
   const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [saveToast, setSaveToast] = useState(false)
 
   const store = useBudgetStore()
   const isFirstMount = useRef(true)
@@ -90,17 +91,15 @@ export default function App() {
     }
   }
 
-  async function handleSave() {
-    if (!window.electronAPI) return
-    const data = getSerializableState()
-    if (currentFilePath) {
-      const result = await window.electronAPI.saveProject(data, currentFilePath)
-      if (result.success) setHasUnsavedChanges(false)
-    } else {
-      await handleSaveAs()
-    }
+  // Save: writes to app-internal localStorage (Zustand persist already does this automatically).
+  // Shows a brief "Saved" toast to confirm. No dialog, no file path needed.
+  function handleSave() {
+    setHasUnsavedChanges(false)
+    setSaveToast(true)
+    setTimeout(() => setSaveToast(false), 2000)
   }
 
+  // Save As: exports the project to a user-chosen .feemo file via OS dialog.
   async function handleSaveAs() {
     if (!window.electronAPI) return
     const data = getSerializableState()
@@ -192,6 +191,20 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Quick-save toast */}
+      {saveToast && (
+        <div style={{
+          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg2)', border: '1px solid var(--green)',
+          color: 'var(--green)', fontWeight: 600, fontSize: 13,
+          padding: '10px 22px', borderRadius: 8,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          zIndex: 9999, pointerEvents: 'none',
+        }}>
+          ✓ Saved to app storage
+        </div>
+      )}
     </div>
   )
 }

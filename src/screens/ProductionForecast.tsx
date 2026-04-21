@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, getDeptTarget, getTotalMonths, getMonthLabel, getMonthPhase } from '../store/budgetStore'
+import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, Timeline, getDeptTarget, getTotalMonths, getMonthLabel, getMonthPhase } from '../store/budgetStore'
 
 const DEPT_ACTIVE_PHASES: Partial<Record<DeptCode, string[]>> = {
   A:  ['DEV'],
@@ -43,34 +43,52 @@ function suggestInstallmentTiming(
   installments: Installment[],
   paymentsPerMonth: number[],
   totalBudget: number,
+  timeline: Timeline,
 ): Installment[] {
-  // Greedy: assign installments (largest first) to earliest month that prevents deficit
-  const sorted = [...installments].sort((a, b) => b.percentage - a.percentage)
-  const suggested: Installment[] = installments.map(i => ({ ...i }))
   const nMonths = paymentsPerMonth.length
+  if (!nMonths || !installments.length) return installments.map(i => ({ ...i }))
 
-  // Simulate cumulative spend month by month
-  const cumSpend = paymentsPerMonth.map((_, i) =>
-    paymentsPerMonth.slice(0, i + 1).reduce((s, v) => s + v, 0)
-  )
+  const suggested: Installment[] = installments.map(i => ({ ...i }))
 
-  // Assign each installment to the month just before deficit would occur
-  let assignedReceipts = new Array(nMonths).fill(0)
-  sorted.forEach(inst => {
+  // Phase anchor months for "no-deficit" distribution (1-indexed, clamped to nMonths)
+  const { developmentMonths: devM, preProdMonths: preM, shootMonths: shootM } = timeline
+  const clamp = (m: number) => Math.max(1, Math.min(m, nMonths))
+  const phaseAnchors = [
+    clamp(1),                          // development start
+    clamp(devM + 1),                   // pre-prod start
+    clamp(devM + preM + 1),            // shoot start
+    clamp(devM + preM + shootM + 1),   // post start
+  ]
+
+  // Sort installments largest-first so biggest payment gets the most critical slot
+  const order = [...installments].sort((a, b) => b.percentage - a.percentage)
+  const receipts = new Array(nMonths).fill(0) // running receipt schedule (index = month-1)
+
+  order.forEach((inst, idx) => {
     const amount = (inst.percentage / 100) * totalBudget
-    // Find earliest month m where cumulative spend up to m > already-assigned receipts up to m-1
-    let bestMonth = 1
-    for (let m = 1; m <= nMonths; m++) {
-      const receiptsUpToM = assignedReceipts.slice(0, m).reduce((s, v) => s + v, 0) + amount
-      if (receiptsUpToM >= cumSpend[m - 1]) {
-        bestMonth = m
-        break
-      }
-      bestMonth = m
+
+    // Compute running balance WITHOUT this installment to find first deficit month
+    let balance = 0
+    let deficitMonth = 0
+    for (let i = 0; i < nMonths; i++) {
+      balance += receipts[i] - paymentsPerMonth[i]
+      if (balance < 0) { deficitMonth = i + 1; break }
     }
-    assignedReceipts[bestMonth - 1] += amount
-    const orig = suggested.find(i => i.id === inst.id)
-    if (orig) orig.month = bestMonth
+
+    let month: number
+    if (deficitMonth > 0) {
+      // Place at the exact month cash runs out
+      month = deficitMonth
+    } else {
+      // No deficit: spread across phase anchors weighted toward early production
+      month = phaseAnchors[Math.min(idx, phaseAnchors.length - 1)]
+    }
+
+    month = clamp(month)
+    receipts[month - 1] += amount
+
+    const entry = suggested.find(s => s.id === inst.id)
+    if (entry) entry.month = month
   })
 
   return suggested
@@ -247,7 +265,7 @@ export default function ProductionForecast() {
               className="btn btn-sm"
               style={{ background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 700 }}
               onClick={() => {
-                const suggested = suggestInstallmentTiming(installments, totalPaymentsPerMonth, project.totalBudget)
+                const suggested = suggestInstallmentTiming(installments, totalPaymentsPerMonth, project.totalBudget, timeline)
                 setInstallments(suggested)
               }}
             >
@@ -429,7 +447,7 @@ export default function ProductionForecast() {
               <button
                 className="btn btn-primary"
                 onClick={() => {
-                  const suggested = suggestInstallmentTiming(installments, totalPaymentsPerMonth, project.totalBudget)
+                  const suggested = suggestInstallmentTiming(installments, totalPaymentsPerMonth, project.totalBudget, timeline)
                   setSuggestedSchedule(suggested)
                   setShowSuggestion(true)
                 }}

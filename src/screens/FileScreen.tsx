@@ -3,7 +3,7 @@ import { useBudgetStore } from '../store/budgetStore'
 interface FileScreenProps {
   currentFilePath: string | null
   hasUnsavedChanges: boolean
-  onSave: () => Promise<void>
+  onSave: () => void
   onSaveAs: () => Promise<void>
   onOpen: () => Promise<void>
   onClose: () => void
@@ -58,16 +58,16 @@ export default function FileScreen({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 480 }}>
         <ActionRow
           icon="↓"
-          title={currentFilePath ? 'Save' : 'Save As…'}
-          description={currentFilePath ? `Save to ${fileName}` : 'Choose a location to save your .feemo file'}
-          onClick={currentFilePath ? onSave : onSaveAs}
+          title="Save"
+          description="Instantly save to app storage — no dialog, no interruption"
+          onClick={onSave}
           accent
           badge={hasUnsavedChanges ? 'Unsaved changes' : undefined}
         />
         <ActionRow
           icon="⎘"
           title="Save As…"
-          description="Save a copy to a new location"
+          description={currentFilePath ? `Export to a file — last saved to ${fileName}` : 'Export project as a .feemo file to any location on your computer'}
           onClick={onSaveAs}
         />
         <ActionRow

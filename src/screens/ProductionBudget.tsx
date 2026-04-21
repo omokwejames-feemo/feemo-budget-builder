@@ -199,13 +199,20 @@ export default function ProductionBudget() {
   const prevTotalRef = useRef(0)
   const cur = store.project.currency || 'N'
 
-  const grandTotal = DEPARTMENTS.reduce((sum, d) => sum + getDeptActual(d.code as DeptCode, store), 0)
   const grandTarget = store.project.totalBudget
+  const feePct = store.project.productionFeePercent ?? 0
+  const feeAmount = (feePct / 100) * grandTarget
+
+  // Dept II is auto-calculated from the fee %; exclude its manual line items from totals
+  const subTotal = DEPARTMENTS
+    .filter(d => d.code !== 'II')
+    .reduce((sum, d) => sum + getDeptActual(d.code as DeptCode, store), 0)
+  const grandTotal = subTotal + feeAmount
+  const variance = grandTotal - grandTarget
 
   const isOverBudget = grandTotal > grandTarget && grandTarget > 0
   const overBy = grandTotal - grandTarget
 
-  // Reset dismissed state when total dips back under budget
   useEffect(() => {
     if (grandTotal <= grandTarget) setOverBudgetDismissed(false)
     if (grandTotal > grandTarget && prevTotalRef.current <= grandTarget) {
@@ -213,12 +220,10 @@ export default function ProductionBudget() {
     }
     prevTotalRef.current = grandTotal
   }, [grandTotal, grandTarget])
-  const feePct = store.project.productionFeePercent ?? 5
-  const feeAmount = (feePct / 100) * grandTarget
-  const subTotal = grandTotal - getDeptActual('II', store)
-  const variance = grandTotal - grandTarget
 
-  const visibleDepts = activeDept === 'all' ? DEPARTMENTS : DEPARTMENTS.filter(d => d.code === activeDept)
+  // Dept II is auto-calculated; never shown as an editable section
+  const editableDepts = DEPARTMENTS.filter(d => d.code !== 'II')
+  const visibleDepts = activeDept === 'all' ? editableDepts : editableDepts.filter(d => d.code === activeDept)
 
   return (
     <div className="screen">
@@ -254,7 +259,7 @@ export default function ProductionBudget() {
           className={`btn btn-sm ${activeDept === 'all' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveDept('all')}
         >All</button>
-        {DEPARTMENTS.map(d => {
+        {editableDepts.map(d => {
           const actual = getDeptActual(d.code as DeptCode, store)
           return (
             <button
@@ -273,6 +278,58 @@ export default function ProductionBudget() {
       {visibleDepts.map(d => (
         <DeptSection key={d.code} code={d.code as DeptCode} />
       ))}
+
+      {/* Dept II — auto-calculated, read-only */}
+      {activeDept === 'all' && (
+        <div className="card" style={{ marginBottom: 16, border: '1px solid rgba(245,166,35,0.25)' }}>
+          <div className="card-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="alloc-code" style={{ fontSize: 13 }}>II</span>
+              <span className="card-title">Contingency / Production Fee</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12 }}>
+              <span style={{ color: 'var(--text3)', fontSize: 11 }}>Auto-calculated from Assumptions</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{feePct}% of budget</span>
+              <span style={{ color: 'var(--text2)' }}>= <strong style={{ color: 'var(--accent)' }}>{fmtCur(feeAmount, cur)}</strong></span>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 70 }}>SCH.NO.</th>
+                  <th>Detail / Description</th>
+                  <th style={{ width: 60, textAlign: 'right' }}>QTY</th>
+                  <th style={{ width: 110, textAlign: 'right' }}>Rate ({cur})</th>
+                  <th style={{ width: 80 }}>Unit</th>
+                  <th style={{ width: 40 }}>I/E</th>
+                  <th style={{ width: 130 }} className="td-num">Total ({cur})</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="td-mono" style={{ color: 'var(--text3)', fontSize: 11 }}>II1</td>
+                  <td style={{ color: 'var(--text2)', fontSize: 13 }}>Production Fee / Contingency</td>
+                  <td className="td-num" style={{ color: 'var(--text3)' }}>1</td>
+                  <td className="td-num" style={{ color: 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>{fmtCur(feeAmount, cur)}</td>
+                  <td style={{ color: 'var(--text3)', fontSize: 12 }}>Flat</td>
+                  <td style={{ color: 'var(--green)', fontWeight: 700, fontSize: 12 }}>E</td>
+                  <td className="td-num" style={{ color: 'var(--accent)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtCur(feeAmount, cur)}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr className="row-subtotal">
+                  <td colSpan={6}>TOTAL CONTINGENCY / PRODUCTION FEE</td>
+                  <td className="td-num">{fmtCur(feeAmount, cur)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text3)', borderTop: '1px solid var(--border)' }}>
+            To change this figure, update the Production Fee % in the Assumptions Dashboard.
+          </div>
+        </div>
+      )}
 
       {activeDept === 'all' && grandTotal > 0 && (
         <div className="card">
