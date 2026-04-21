@@ -1,0 +1,52 @@
+{
+  "name": "feemo-budget-builder",
+  "version": "1.0.0",
+  "description": "Feemo Budget Builder — Smart Production Budget Generator",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev:vite": "vite --port 5173",
+    "dev": "vite",
+    "build:vite": "vite build",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "Feemovision",
+  "license": "MIT",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "nodemon": "^3.1.4",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.4",
+    "vite-plugin-electron": "^0.28.7",
+    "vite-plugin-electron-renderer": "^0.14.5"
+  },
+  "build": {
+    "appId": "com.feemovision.budget-builder",
+    "productName": "Feemo Budget Builder",
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "public/icon.icns"
+    },
+    "win": {
+      "icon": "public/icon-1024.png"
+    },
+    "linux": {
+      "icon": "public/icon-1024.png"
+    }
+  }
+}

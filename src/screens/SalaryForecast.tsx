@@ -1,0 +1,242 @@
+import { useState } from 'react'
+import {
+  useBudgetStore, DEPARTMENTS, DeptCode, SalaryRole,
+  getTotalMonths, getMonthLabel, getMonthPhase
+} from '../store/budgetStore'
+
+let rid = 2000
+function newRoleId() { return String(++rid) }
+
+function fmt(n: number, cur = 'N') {
+  if (!n) return '—'
+  return `${cur}${n.toLocaleString('en', { maximumFractionDigits: 0 })}`
+}
+
+const PHASES = ['dev', 'pre', 'shoot', 'post', 'all'] as const
+
+function phaseForMonth(monthIndex: number, timeline: import('../store/budgetStore').Timeline): 'dev' | 'pre' | 'shoot' | 'post' {
+  const { developmentMonths, preProdMonths, shootMonths } = timeline
+  if (monthIndex <= developmentMonths) return 'dev'
+  if (monthIndex <= developmentMonths + preProdMonths) return 'pre'
+  if (monthIndex <= developmentMonths + preProdMonths + shootMonths) return 'shoot'
+  return 'post'
+}
+
+function isPhaseActive(role: SalaryRole, monthPhase: 'dev' | 'pre' | 'shoot' | 'post'): boolean {
+  if (role.phase === 'all') return true
+  if (role.phase === 'dev') return monthPhase === 'dev'
+  if (role.phase === 'pre') return monthPhase === 'pre'
+  if (role.phase === 'shoot') return monthPhase === 'shoot'
+  if (role.phase === 'post') return monthPhase === 'post'
+  return false
+}
+
+export default function SalaryForecast() {
+  const store = useBudgetStore()
+  const { timeline, project, salaryRoles, addSalaryRole, updateSalaryRole, removeSalaryRole } = store
+  const totalMonths = getTotalMonths(timeline)
+  const cur = project.currency || 'N'
+  const months = Array.from({ length: totalMonths }, (_, i) => i + 1)
+
+  const [filterDept, setFilterDept] = useState<DeptCode | 'all'>('all')
+
+  function addRole() {
+    addSalaryRole({
+      id: newRoleId(),
+      schedNo: `${salaryRoles.length + 1}`,
+      role: '',
+      deptCode: 'A',
+      phase: 'all',
+      monthlyAmounts: {},
+    })
+  }
+
+  const visibleRoles = filterDept === 'all' ? salaryRoles : salaryRoles.filter(r => r.deptCode === filterDept)
+
+  const monthlyTotals = months.map(m =>
+    salaryRoles.reduce((sum, r) => sum + (r.monthlyAmounts[m] || 0), 0)
+  )
+
+  const grandTotal = salaryRoles.reduce((sum, r) =>
+    sum + Object.values(r.monthlyAmounts).reduce((s, v) => s + v, 0), 0
+  )
+
+  const cumulativeMonthly = months.reduce<number[]>((acc, _, i) => {
+    acc.push((acc[i - 1] || 0) + monthlyTotals[i])
+    return acc
+  }, [])
+
+  return (
+    <div className="screen" style={{ maxWidth: '100%', paddingRight: 24 }}>
+      <div className="screen-header">
+        <div className="screen-title">Salary Forecast</div>
+        <div className="screen-sub">
+          Monthly salary per role. Red cells = amount entered in a phase the role isn't assigned to.
+        </div>
+      </div>
+
+      {/* Phase legend */}
+      <div className="phase-strip" style={{ marginBottom: 16 }}>
+        {[
+          { label: 'DEV', cls: 'badge-dev' },
+          { label: 'PRE-PROD', cls: 'badge-pre' },
+          { label: 'SHOOT', cls: 'badge-shoot' },
+          { label: 'POST', cls: 'badge-post' },
+        ].map(p => (
+          <span key={p.label} className={`badge ${p.cls}`} style={{ padding: '4px 12px' }}>{p.label}</span>
+        ))}
+        <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text2)' }}>
+          {totalMonths} months total
+          {project.startDate && ` · starting ${new Date(project.startDate + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}`}
+        </span>
+      </div>
+
+      {/* Dept filter */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+        <button className={`btn btn-sm ${filterDept === 'all' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilterDept('all')}>All</button>
+        {DEPARTMENTS.map(d => (
+          <button
+            key={d.code}
+            className={`btn btn-sm ${filterDept === d.code ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setFilterDept(d.code as DeptCode)}
+          >{d.code}</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <button className="btn btn-primary btn-sm" onClick={addRole}>+ Add Role</button>
+        <span style={{ fontSize: 12, color: 'var(--text2)' }}>
+          Grand Total: <strong style={{ color: 'var(--text)' }}>{fmt(grandTotal, cur)}</strong>
+        </span>
+      </div>
+
+      {salaryRoles.length === 0 ? (
+        <div className="card">
+          <div className="card-body" style={{ textAlign: 'center', padding: '40px', color: 'var(--text3)' }}>
+            No roles yet. <button className="btn btn-ghost btn-sm" onClick={addRole} style={{ marginLeft: 8 }}>Add first role</button>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="table-wrap">
+            <table style={{ fontSize: 11.5 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 50 }}>SCH</th>
+                  <th style={{ minWidth: 140 }}>Role</th>
+                  <th style={{ width: 60 }}>Dept</th>
+                  <th style={{ width: 80 }}>Phase</th>
+                  {months.map(m => {
+                    const phase = phaseForMonth(m, timeline)
+                    const label = getMonthLabel(m, timeline, project.startDate)
+                    return (
+                      <th key={m} style={{ width: 90, textAlign: 'right' }}>
+                        <div>{label}</div>
+                        <div style={{ marginTop: 2 }}>
+                          <span className={`badge badge-${phase}`} style={{ fontSize: 9 }}>{phase.toUpperCase()}</span>
+                        </div>
+                      </th>
+                    )
+                  })}
+                  <th style={{ width: 100, textAlign: 'right' }}>TOTAL</th>
+                  <th style={{ width: 36 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRoles.map(role => {
+                  const roleTotal = Object.values(role.monthlyAmounts).reduce((s, v) => s + v, 0)
+                  return (
+                    <tr key={role.id}>
+                      <td className="td-mono">
+                        <input
+                          className="td-input"
+                          value={role.schedNo}
+                          onChange={e => updateSalaryRole(role.id, { schedNo: e.target.value })}
+                          style={{ width: 42 }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="td-input"
+                          value={role.role}
+                          onChange={e => updateSalaryRole(role.id, { role: e.target.value })}
+                          placeholder="Role title..."
+                          style={{ minWidth: 130 }}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="td-input"
+                          value={role.deptCode}
+                          onChange={e => updateSalaryRole(role.id, { deptCode: e.target.value as DeptCode })}
+                          style={{ padding: '3px 4px', fontSize: 11 }}
+                        >
+                          {DEPARTMENTS.map(d => <option key={d.code} value={d.code}>{d.code}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          className="td-input"
+                          value={role.phase}
+                          onChange={e => updateSalaryRole(role.id, { phase: e.target.value as SalaryRole['phase'] })}
+                          style={{ padding: '3px 4px', fontSize: 11 }}
+                        >
+                          {PHASES.map(p => <option key={p} value={p}>{p === 'all' ? 'All' : p.toUpperCase()}</option>)}
+                        </select>
+                      </td>
+                      {months.map(m => {
+                        const mPhase = phaseForMonth(m, timeline)
+                        const active = isPhaseActive(role, mPhase)
+                        const val = role.monthlyAmounts[m] || 0
+                        const isWarn = !active && val > 0
+                        return (
+                          <td key={m} className={isWarn ? 'warn-cell' : ''} style={{ padding: '3px 6px' }}>
+                            <input
+                              className="td-input"
+                              type="number"
+                              value={val || ''}
+                              onChange={e => {
+                                const newAmts = { ...role.monthlyAmounts, [m]: Number(e.target.value) }
+                                if (!e.target.value) delete newAmts[m]
+                                updateSalaryRole(role.id, { monthlyAmounts: newAmts })
+                              }}
+                              style={{ textAlign: 'right', width: 80, color: isWarn ? 'var(--red)' : undefined }}
+                              placeholder="—"
+                              title={isWarn ? `⚠ ${role.role} is assigned to ${role.phase.toUpperCase()} phase only` : undefined}
+                            />
+                          </td>
+                        )
+                      })}
+                      <td className="td-num" style={{ fontWeight: 600 }}>{fmt(roleTotal, cur)}</td>
+                      <td>
+                        <button className="btn btn-danger btn-sm" style={{ padding: '3px 7px' }} onClick={() => removeSalaryRole(role.id)}>✕</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="row-subtotal">
+                  <td colSpan={4}>TOTAL MONTHLY SPEND</td>
+                  {monthlyTotals.map((t, i) => (
+                    <td key={i} className="td-num">{fmt(t, cur)}</td>
+                  ))}
+                  <td className="td-num">{fmt(grandTotal, cur)}</td>
+                  <td />
+                </tr>
+                <tr style={{ background: 'rgba(52,152,219,0.05)' }}>
+                  <td colSpan={4} style={{ fontSize: 11, color: 'var(--text2)' }}>CUMULATIVE SPEND</td>
+                  {cumulativeMonthly.map((t, i) => (
+                    <td key={i} className="td-num" style={{ fontSize: 11, color: 'var(--blue)' }}>{fmt(t, cur)}</td>
+                  ))}
+                  <td />
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
