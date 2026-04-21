@@ -36,6 +36,7 @@
     "appId": "com.feemovision.budget-builder",
     "productName": "Feemo Budget Builder",
     "asar": true,
+    "publish": null,
     "directories": {
       "output": "release",
       "buildResources": "public"
