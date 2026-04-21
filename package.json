@@ -35,18 +35,27 @@
   "build": {
     "appId": "com.feemovision.budget-builder",
     "productName": "Feemo Budget Builder",
+    "asar": true,
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "public"
     },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "public/icon.icns"
+      "icon": "public/icon.icns",
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
     },
     "win": {
-      "icon": "public/icon-1024.png"
+      "icon": "public/icon-1024.png",
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
     },
-    "linux": {
-      "icon": "public/icon-1024.png"
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }
