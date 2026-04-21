@@ -10,10 +10,12 @@ function fmt(n: number, cur = 'N') {
 declare global {
   interface Window {
     electronAPI?: {
+      // File management
       saveFile: (buffer: number[], name: string) => Promise<{ success: boolean; filePath?: string }>
       saveProject: (data: string, filePath: string) => Promise<{ success: boolean; filePath?: string }>
       saveProjectTo: (data: string, defaultName: string) => Promise<{ success: boolean; filePath?: string }>
       openProject: () => Promise<{ success: boolean; filePath?: string; data?: string }>
+      // Updates
       getAppVersion: () => Promise<string>
       checkForUpdates: () => Promise<{
         success: boolean
@@ -21,9 +23,14 @@ declare global {
         current: string
         latest: string
         hasUpdate: boolean
-        downloadUrl: string
+        releasePageUrl: string
+        assetUrl: string
+        assetSize: number
       }>
+      downloadAndOpenUpdate: (assetUrl: string, fileName: string) => Promise<{ success: boolean; path?: string; error?: string }>
       openExternal: (url: string) => Promise<void>
+      onDownloadProgress: (cb: (data: { percent: number; downloaded: number; total: number }) => void) => void
+      removeDownloadProgressListener: () => void
     }
   }
 }
