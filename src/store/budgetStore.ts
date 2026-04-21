@@ -54,6 +54,7 @@ export interface ProjectDetails {
   shootDays: number
   location: string
   currency: string
+  exchangeRate: number    // units of NGN per 1 foreign currency unit (1 for NGN)
   startDate: string
   productionFeePercent: number // % of total budget charged as production fee
 }
@@ -108,11 +109,12 @@ export interface BudgetState {
   setForecastOverride: (key: string, value: number) => void
   clearForecastOverrides: () => void
   resetStore: () => void
+  loadState: (state: Partial<Pick<BudgetState, 'project' | 'timeline' | 'installments' | 'deptAllocations' | 'lineItems' | 'salaryRoles' | 'forecastOverrides'>>) => void
 }
 
 const defaultProject: ProjectDetails = {
-  title: '',
-  company: '',
+  title: 'Ajoche',
+  company: 'Feemovision',
   totalBudget: 0,
   format: 'Feature Film',
   duration: 90,
@@ -122,9 +124,10 @@ const defaultProject: ProjectDetails = {
   daysPerEpisode: 1,
   shootDays: 20,
   location: '',
-  currency: 'N',
+  currency: '',
+  exchangeRate: 1,
   startDate: '',
-  productionFeePercent: 5,
+  productionFeePercent: 0,
 }
 
 const defaultTimeline: Timeline = {
@@ -192,6 +195,7 @@ export const useBudgetStore = create<BudgetState>()(
         set(s => ({ forecastOverrides: { ...s.forecastOverrides, [key]: value } })),
       clearForecastOverrides: () => set({ forecastOverrides: {} }),
       resetStore: () => set(initialState),
+      loadState: (state) => set({ ...initialState, ...state }),
     }),
     {
       name: 'feemo-budget-v1',

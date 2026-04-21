@@ -1,23 +1,122 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useBudgetStore } from './store/budgetStore'
+import HomeScreen from './screens/HomeScreen'
 import AssumptionsDashboard from './screens/AssumptionsDashboard'
 import ProductionBudget from './screens/ProductionBudget'
 import SalaryForecast from './screens/SalaryForecast'
 import ProductionForecast from './screens/ProductionForecast'
 import ExportScreen from './screens/ExportScreen'
+import FileScreen from './screens/FileScreen'
 import './App.css'
 
-type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'export'
+type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'export' | 'file'
 
-const NAV = [
-  { id: 'assumptions' as Screen, label: 'Assumptions', icon: '⚙' },
-  { id: 'budget' as Screen, label: 'Production Budget', icon: '₦' },
-  { id: 'salary' as Screen, label: 'Salary Forecast', icon: '👥' },
-  { id: 'forecast' as Screen, label: 'Production Forecast', icon: '📈' },
-  { id: 'export' as Screen, label: 'Export', icon: '↓' },
+
+const NAV: { id: Screen; label: string; icon: string }[] = [
+  { id: 'assumptions', label: 'Assumptions', icon: '⚙' },
+  { id: 'budget', label: 'Production Budget', icon: '₦' },
+  { id: 'salary', label: 'Salary Forecast', icon: '👥' },
+  { id: 'forecast', label: 'Production Forecast', icon: '📈' },
+  { id: 'export', label: 'Export', icon: '↓' },
+  { id: 'file', label: 'File', icon: '🗂' },
 ]
 
 export default function App() {
+  const [appView, setAppView] = useState<'home' | 'app'>('home')
   const [screen, setScreen] = useState<Screen>('assumptions')
+  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  const store = useBudgetStore()
+  const isFirstMount = useRef(true)
+
+  // Track unsaved changes whenever store state mutates
+  useEffect(() => {
+    if (appView !== 'app') return
+    const unsub = useBudgetStore.subscribe(() => {
+      if (isFirstMount.current) { isFirstMount.current = false; return }
+      setHasUnsavedChanges(true)
+    })
+    return unsub
+  }, [appView])
+
+  function getSerializableState() {
+    const s = useBudgetStore.getState()
+    return JSON.stringify({
+      project: s.project,
+      timeline: s.timeline,
+      installments: s.installments,
+      deptAllocations: s.deptAllocations,
+      lineItems: s.lineItems,
+      salaryRoles: s.salaryRoles,
+      forecastOverrides: s.forecastOverrides,
+    }, null, 2)
+  }
+
+  function handleNewProject() {
+    store.resetStore()
+    setCurrentFilePath(null)
+    setHasUnsavedChanges(false)
+    isFirstMount.current = true
+    setScreen('assumptions')
+    setAppView('app')
+  }
+
+  async function handleOpenProject() {
+    if (!window.electronAPI) return
+    const result = await window.electronAPI.openProject()
+    if (!result.success || !result.data || !result.filePath) return
+    try {
+      const parsed = JSON.parse(result.data)
+      store.loadState(parsed)
+      setCurrentFilePath(result.filePath)
+      setHasUnsavedChanges(false)
+      isFirstMount.current = true
+      setScreen('assumptions')
+      setAppView('app')
+    } catch {
+      // malformed file — ignore
+    }
+  }
+
+  async function handleSave() {
+    if (!window.electronAPI) return
+    const data = getSerializableState()
+    if (currentFilePath) {
+      const result = await window.electronAPI.saveProject(data, currentFilePath)
+      if (result.success) setHasUnsavedChanges(false)
+    } else {
+      await handleSaveAs()
+    }
+  }
+
+  async function handleSaveAs() {
+    if (!window.electronAPI) return
+    const data = getSerializableState()
+    const title = store.project.title || 'untitled'
+    const result = await window.electronAPI.saveProjectTo(data, `${title}.feemo`)
+    if (result.success && result.filePath) {
+      setCurrentFilePath(result.filePath)
+      setHasUnsavedChanges(false)
+    }
+  }
+
+  function handleClose() {
+    if (hasUnsavedChanges) {
+      if (!confirm('You have unsaved changes. Close anyway?')) return
+    }
+    setAppView('home')
+    setCurrentFilePath(null)
+    setHasUnsavedChanges(false)
+  }
+
+  if (appView === 'home') {
+    return <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} />
+  }
+
+  const fileName = currentFilePath
+    ? currentFilePath.split('/').pop()
+    : null
 
   return (
     <div className="app">
@@ -29,6 +128,19 @@ export default function App() {
             <div className="brand-sub">Budget Builder</div>
           </div>
         </div>
+
+        {/* File status chip */}
+        {(fileName || hasUnsavedChanges) && (
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>
+              {fileName ?? 'Unsaved project'}
+            </div>
+            {hasUnsavedChanges && (
+              <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>● Unsaved changes</div>
+            )}
+          </div>
+        )}
+
         <nav className="sidebar-nav">
           {NAV.map(item => (
             <button
@@ -38,6 +150,9 @@ export default function App() {
             >
               <span className="nav-icon">{item.icon}</span>
               <span>{item.label}</span>
+              {item.id === 'file' && hasUnsavedChanges && (
+                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+              )}
             </button>
           ))}
         </nav>
@@ -49,6 +164,16 @@ export default function App() {
         {screen === 'salary' && <SalaryForecast />}
         {screen === 'forecast' && <ProductionForecast />}
         {screen === 'export' && <ExportScreen />}
+        {screen === 'file' && (
+          <FileScreen
+            currentFilePath={currentFilePath}
+            hasUnsavedChanges={hasUnsavedChanges}
+            onSave={handleSave}
+            onSaveAs={handleSaveAs}
+            onOpen={handleOpenProject}
+            onClose={handleClose}
+          />
+        )}
       </main>
     </div>
   )

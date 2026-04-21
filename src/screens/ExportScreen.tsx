@@ -11,6 +11,9 @@ declare global {
   interface Window {
     electronAPI?: {
       saveFile: (buffer: number[], name: string) => Promise<{ success: boolean; filePath?: string }>
+      saveProject: (data: string, filePath: string) => Promise<{ success: boolean; filePath?: string }>
+      saveProjectTo: (data: string, defaultName: string) => Promise<{ success: boolean; filePath?: string }>
+      openProject: () => Promise<{ success: boolean; filePath?: string; data?: string }>
     }
   }
 }

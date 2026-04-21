@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
 import { join } from 'path'
-import { writeFile } from 'fs/promises'
+import { writeFile, readFile } from 'fs/promises'
 
 function createWindow() {
   const iconPath = join(app.getAppPath(), 'public', 'icon.icns')
@@ -38,6 +38,31 @@ ipcMain.handle('save-file', async (_event, { buffer, defaultName }: { buffer: nu
   if (canceled || !filePath) return { success: false }
   await writeFile(filePath, Buffer.from(buffer))
   return { success: true, filePath }
+})
+
+ipcMain.handle('save-project', async (_event, { data, filePath }: { data: string; filePath: string }) => {
+  await writeFile(filePath, data, 'utf-8')
+  return { success: true, filePath }
+})
+
+ipcMain.handle('save-project-to', async (_event, { data, defaultName }: { data: string; defaultName: string }) => {
+  const { filePath, canceled } = await dialog.showSaveDialog({
+    defaultPath: defaultName,
+    filters: [{ name: 'Feemo Project', extensions: ['feemo'] }],
+  })
+  if (canceled || !filePath) return { success: false }
+  await writeFile(filePath, data, 'utf-8')
+  return { success: true, filePath }
+})
+
+ipcMain.handle('open-project', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog({
+    filters: [{ name: 'Feemo Project', extensions: ['feemo'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || filePaths.length === 0) return { success: false }
+  const data = await readFile(filePaths[0], 'utf-8')
+  return { success: true, filePath: filePaths[0], data }
 })
 
 app.whenReady().then(createWindow)

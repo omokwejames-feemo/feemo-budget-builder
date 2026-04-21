@@ -235,9 +235,25 @@ export default function ProductionForecast() {
           <span style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13 }}>
             ⚠ Cashflow deficit in {deficitMonths.length} month{deficitMonths.length > 1 ? 's' : ''} — {deficitMonths.map(d => d.label).join(', ')}
           </span>
-          <button className="btn btn-sm" style={{ background: 'var(--red)', color: '#fff', border: 'none' }} onClick={() => setDeficitDismissed(false)}>
-            View Details
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              className="btn btn-sm"
+              style={{ background: 'transparent', color: 'var(--text2)', border: '1px solid var(--border)' }}
+              onClick={() => setDeficitDismissed(false)}
+            >
+              Details
+            </button>
+            <button
+              className="btn btn-sm"
+              style={{ background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 700 }}
+              onClick={() => {
+                const suggested = suggestInstallmentTiming(installments, totalPaymentsPerMonth, project.totalBudget)
+                setInstallments(suggested)
+              }}
+            >
+              Apply Fix
+            </button>
+          </div>
         </div>
       )}
 

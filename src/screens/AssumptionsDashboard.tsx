@@ -10,9 +10,16 @@ import { JURIYA_FULL, BC_FULL } from '../export/templateData'
 import { applyFullTemplate, applyParsedBudget } from '../export/applyTemplate'
 import { parseUploadedBudget } from '../export/parseUploadedBudget'
 
-function fmt(n: number, currency = 'N') {
+const CURRENCIES = [
+  { value: '₦', label: '₦  NGN — Nigerian Naira', foreign: false },
+  { value: '$', label: '$  USD — US Dollar',       foreign: true  },
+  { value: '£', label: '£  GBP — British Pound',  foreign: true  },
+]
+
+function fmt(n: number, currency = '₦') {
   if (!n) return '—'
-  return `${currency}${n.toLocaleString()}`
+  const sym = currency || '₦'
+  return `${sym}${n.toLocaleString()}`
 }
 
 export default function AssumptionsDashboard() {
@@ -21,6 +28,7 @@ export default function AssumptionsDashboard() {
     timeline, setTimeline,
     installments, setInstallments,
     deptAllocations, setDeptAllocation,
+    resetStore,
   } = useBudgetStore()
 
   const [autofillConfirm, setAutofillConfirm] = useState<'juriya' | 'bc' | null>(null)
@@ -134,7 +142,18 @@ export default function AssumptionsDashboard() {
       <div className="card">
         <div className="card-header">
           <span className="card-title">Project Details</span>
-          {sectionMark(detailsComplete)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 11, color: 'var(--text3)' }}
+              onClick={() => {
+                if (confirm('Reset all project fields to blank?')) resetStore()
+              }}
+            >
+              Reset
+            </button>
+            {sectionMark(detailsComplete)}
+          </div>
         </div>
         <div className="card-body">
           <div className="form-grid form-grid-2" style={{ marginBottom: 14 }}>
@@ -189,7 +208,18 @@ export default function AssumptionsDashboard() {
             </div>
             <div className="field">
               <label>Currency</label>
-              <input value={project.currency} onChange={e => setProject({ currency: e.target.value })} placeholder="N" />
+              <select
+                value={project.currency || '₦'}
+                onChange={e => {
+                  const cur = e.target.value
+                  const isForeign = CURRENCIES.find(c => c.value === cur)?.foreign ?? false
+                  setProject({ currency: cur, exchangeRate: isForeign ? (project.exchangeRate || 1) : 1 })
+                }}
+              >
+                {CURRENCIES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
             </div>
             <div className="field">
               <label>Format</label>
@@ -220,6 +250,35 @@ export default function AssumptionsDashboard() {
               </div>
             )}
           </div>
+
+          {/* Exchange rate panel — shown when foreign currency is selected */}
+          {CURRENCIES.find(c => c.value === (project.currency || '₦'))?.foreign && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '10px 14px', marginBottom: 14,
+              background: 'rgba(52,152,219,0.06)',
+              border: '1px solid rgba(52,152,219,0.2)',
+              borderRadius: 6,
+            }}>
+              <span style={{ fontSize: 12, color: 'var(--blue)', fontWeight: 600 }}>Exchange Rate</span>
+              <span style={{ fontSize: 12, color: 'var(--text2)' }}>1 {project.currency} =</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={project.exchangeRate || ''}
+                onChange={e => setProject({ exchangeRate: Number(e.target.value) || 1 })}
+                placeholder="e.g. 1600"
+                style={{ width: 110 }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--text2)' }}>₦</span>
+              {project.totalBudget > 0 && project.exchangeRate > 0 && (
+                <span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 4 }}>
+                  Budget ≈ {project.currency}{(project.totalBudget / project.exchangeRate).toLocaleString('en', { maximumFractionDigits: 0 })}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Episodic panel — series uses weeks, telenovela uses days */}
           {isEp && (
