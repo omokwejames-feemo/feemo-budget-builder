@@ -1,9 +1,12 @@
-name: Build Installers
+name: Build & Release
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-mac:
@@ -20,18 +23,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Vite + Electron
+      - name: Build
         run: npm run build
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false   # skip code signing
-          ELECTRON_BUILDER_PUBLISH: never      # don't publish to GitHub Releases
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_PUBLISH: never
 
-      - name: Upload macOS installer
+      - name: Upload dmg artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Feemo-Budget-Builder-Mac
+          name: mac-dmg
           path: release/*.dmg
-          if-no-files-found: error
 
   build-windows:
     name: Windows (.exe)
@@ -47,12 +49,44 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Vite + Electron
+      - name: Build
         run: npm run build
+        env:
+          ELECTRON_BUILDER_PUBLISH: never
 
-      - name: Upload Windows installer
+      - name: Upload exe artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Feemo-Budget-Builder-Windows
+          name: win-exe
           path: release/*.exe
-          if-no-files-found: error
+
+  release:
+    name: Publish Release
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Mac artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dmg
+          path: ./artifacts
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: win-exe
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Feemo Budget Builder v1.0.${{ github.run_number }}
+          files: ./artifacts/*
+          body: |
+            ## Feemo Budget Builder
+
+            Download the installer for your platform:
+
+            - **Mac** → download the `.dmg` file, open it, drag the app to Applications
+            - **Windows** → download the `.exe` file and run the installer
