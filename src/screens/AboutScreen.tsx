@@ -72,7 +72,7 @@ export default function AboutScreen() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ padding: '28px', display: 'flex', alignItems: 'center', gap: 24 }}>
           <img
-            src="/feemo-logo.png"
+            src="./feemo-logo.png"
             alt="Feemovision"
             style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 14, flexShrink: 0 }}
           />

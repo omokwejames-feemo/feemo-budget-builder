@@ -66,7 +66,7 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
         {/* Logo */}
         <div style={{ marginBottom: 28 }}>
           <img
-            src="/feemo-logo.png"
+            src="./feemo-logo.png"
             alt="Feemovision"
             style={{ width: 72, height: 72, objectFit: 'contain' }}
             onError={e => {

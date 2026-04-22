@@ -270,7 +270,7 @@ export default function App() {
         <div className="sidebar-brand">
           <div style={{ width: 32, height: 32, flexShrink: 0 }}>
             <img
-              src="/feemo-logo.png"
+              src="./feemo-logo.png"
               alt="F"
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               onError={e => {

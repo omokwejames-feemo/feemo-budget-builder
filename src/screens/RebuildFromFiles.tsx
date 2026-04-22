@@ -287,7 +287,7 @@ export default function RebuildFromFiles({ onRebuilt }: RebuildFromFilesProps) {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <img
-            src="/feemo-logo.png"
+            src="./feemo-logo.png"
             alt="Feemovision"
             style={{ width: 64, height: 64, objectFit: 'contain' }}
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}

@@ -101,6 +101,7 @@ jobs:
             ## What's new in v${{ steps.version.outputs.version }}
 
             - Fix: Restart and Apply now works — bypasses Squirrel.Mac with a shell-script updater that extracts and applies the update after the app exits
+            - Fix: Feemovision logo now displays correctly in the About tab and all screens in the packaged app
 
             ---
             Mac: download the .dmg — open it and drag to Applications for first install.

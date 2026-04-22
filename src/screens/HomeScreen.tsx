@@ -32,7 +32,7 @@ export default function HomeScreen({ onNewProject, onOpenProject, recents, onOpe
       {/* Logo */}
       <div style={{ width: 96, height: 96, marginBottom: 20 }}>
         <img
-          src="/feemo-logo.png"
+          src="./feemo-logo.png"
           alt="Feemovision"
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           onError={e => {

@@ -94,7 +94,7 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
           display: 'flex', alignItems: 'flex-start', gap: 16,
         }}>
           <img
-            src="/feemo-logo.png"
+            src="./feemo-logo.png"
             alt="Feemovision"
             style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }}
           />
