@@ -36,6 +36,7 @@ jobs:
           name: mac-artifacts
           path: |
             release/*.dmg
+            release/*.zip
             release/latest-mac.yml
 
   build-windows:

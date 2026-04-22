@@ -1,6 +1,6 @@
 {
   "name": "feemo-budget-manager",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Feemo Budget Manager — Smart Production Budget Generator",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -65,10 +65,11 @@
       "target": [
         {
           "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
         }
       ]
     },
