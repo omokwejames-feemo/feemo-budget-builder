@@ -11,7 +11,17 @@ export default defineConfig({
       {
         entry: 'electron/main.ts',
         onstart(args) { args.startup() },
-        vite: { build: { outDir: 'dist-electron', sourcemap: true } },
+        vite: {
+          build: {
+            outDir: 'dist-electron',
+            sourcemap: true,
+            rollupOptions: {
+              // Keep Node.js-only packages out of the vite bundle —
+              // electron-builder includes them from node_modules at runtime
+              external: ['googleapis', 'electron', 'fs', 'path', 'os', 'https', 'http', 'stream', 'crypto'],
+            },
+          },
+        },
       },
       {
         entry: 'electron/preload.ts',
