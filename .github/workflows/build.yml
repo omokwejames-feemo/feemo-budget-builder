@@ -100,9 +100,8 @@ jobs:
           body: |
             ## What's new in v${{ steps.version.outputs.version }}
 
-            - Fix: restart button now shows Restarting state and applies update reliably
-            - Fix: update errors are now surfaced in the UI instead of failing silently
-            - Fix: 3-second fallback forces proper quit if quitAndInstall stalls
+            - Fix: download now retries automatically if the network connection drops mid-redirect
+            - Fix: Restart and Apply now reliably closes and relaunches the app with the update applied
 
             ---
             Mac: download the .dmg — open it and drag to Applications for first install.

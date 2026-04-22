@@ -183,25 +183,37 @@ ipcMain.handle('check-for-updates', async () => {
 })
 
 ipcMain.handle('download-update', async () => {
-  try {
-    await autoUpdater.downloadUpdate()
-    return { success: true }
-  } catch (err) {
-    return { success: false, error: String(err) }
+  // Retry up to 3 times — GitHub redirects to CDN can trigger ERR_NETWORK_CHANGED
+  // in Electron's Chromium net module on the first attempt.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await autoUpdater.downloadUpdate()
+      return { success: true }
+    } catch (err) {
+      const msg = String(err)
+      const isNetworkGlitch = /ERR_NETWORK_CHANGED|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|net::ERR/i.test(msg)
+      if (attempt < 3 && isNetworkGlitch) {
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt))
+        continue
+      }
+      return { success: false, error: msg }
+    }
   }
+  return { success: false, error: 'Download failed after retries.' }
 })
 
 ipcMain.handle('install-update', () => {
+  // Defer past the IPC response so the renderer receives the reply before quit.
   setImmediate(() => {
     try {
-      autoUpdater.quitAndInstall(false, true)
-    } catch {}
-    // Safety net: if quitAndInstall didn't close the app within 3s,
-    // force a proper quit so autoInstallOnAppQuit can apply the update.
-    setTimeout(() => {
+      // isSilent=true avoids the native macOS update dialog (fails for unsigned apps).
+      // isForceRunAfter=true relaunches the app after the update is applied.
+      autoUpdater.quitAndInstall(true, true)
+    } catch {
+      // Fallback: let autoInstallOnAppQuit hook apply the update on normal quit.
       app.relaunch()
       app.quit()
-    }, 3000)
+    }
   })
 })
 
