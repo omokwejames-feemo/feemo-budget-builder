@@ -4,14 +4,13 @@ type CheckState =
   | { status: 'idle' }
   | { status: 'checking' }
   | { status: 'up-to-date'; version: string }
-  | { status: 'update-available'; current: string; latest: string; assetUrl: string; assetSize: number; releasePageUrl: string }
+  | { status: 'update-available'; current: string; latest: string }
   | { status: 'error'; message: string }
 
-type DownloadState =
+type DlState =
   | { status: 'idle' }
   | { status: 'downloading'; percent: number; downloaded: number; total: number }
-  | { status: 'opening' }
-  | { status: 'done' }
+  | { status: 'ready' }
   | { status: 'error'; message: string }
 
 function fmtBytes(b: number) {
@@ -23,11 +22,11 @@ function fmtBytes(b: number) {
 export default function AboutScreen() {
   const [appVersion, setAppVersion] = useState<string>('…')
   const [checkState, setCheckState] = useState<CheckState>({ status: 'idle' })
-  const [dlState, setDlState] = useState<DownloadState>({ status: 'idle' })
-  const isMac = navigator.platform.toUpperCase().includes('MAC')
+  const [dlState, setDlState] = useState<DlState>({ status: 'idle' })
 
   useEffect(() => {
     window.electronAPI?.getAppVersion().then(v => setAppVersion(v)).catch(() => {})
+    window.electronAPI?.onUpdateDownloaded(() => setDlState({ status: 'ready' }))
     return () => { window.electronAPI?.removeDownloadProgressListener() }
   }, [])
 
@@ -39,7 +38,7 @@ export default function AboutScreen() {
       const r = await window.electronAPI.checkForUpdates()
       if (!r.success) { setCheckState({ status: 'error', message: r.error ?? 'Could not reach update server.' }); return }
       if (r.hasUpdate) {
-        setCheckState({ status: 'update-available', current: r.current, latest: r.latest, assetUrl: r.assetUrl, assetSize: r.assetSize, releasePageUrl: r.releasePageUrl })
+        setCheckState({ status: 'update-available', current: r.current, latest: r.latest })
       } else {
         setCheckState({ status: 'up-to-date', version: r.current })
       }
@@ -49,27 +48,17 @@ export default function AboutScreen() {
   }
 
   async function handleDownload() {
-    if (!window.electronAPI || checkState.status !== 'update-available') return
-    const { assetUrl, latest } = checkState
-
-    // Derive a clean filename from the URL
-    const rawName = assetUrl.split('/').pop() ?? `Feemo-Budget-Builder-${latest}${isMac ? '.dmg' : '.exe'}`
-    const fileName = decodeURIComponent(rawName)
-
+    if (!window.electronAPI) return
     setDlState({ status: 'downloading', percent: 0, downloaded: 0, total: 0 })
-
     window.electronAPI.onDownloadProgress(({ percent, downloaded, total }) => {
       setDlState({ status: 'downloading', percent, downloaded, total })
     })
-
-    const result = await window.electronAPI.downloadAndOpenUpdate(assetUrl, fileName)
+    const result = await window.electronAPI.downloadUpdate()
     window.electronAPI.removeDownloadProgressListener()
-
     if (!result.success) {
       setDlState({ status: 'error', message: result.error ?? 'Download failed.' })
-    } else {
-      setDlState({ status: 'done' })
     }
+    // ready state is set by onUpdateDownloaded event
   }
 
   return (
@@ -89,7 +78,7 @@ export default function AboutScreen() {
             boxShadow: '0 4px 20px rgba(245,166,35,0.25)',
           }}>F</div>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Feemo Budget Builder</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Feemo Budget Manager</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{
                 fontSize: 12, color: 'var(--accent)', fontWeight: 700,
@@ -107,7 +96,6 @@ export default function AboutScreen() {
         <div className="card-header"><span className="card-title">Software Updates</span></div>
         <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* ── Check states ── */}
           {checkState.status === 'idle' && (
             <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>
               Click below to check if a newer version is available.
@@ -137,37 +125,24 @@ export default function AboutScreen() {
                 <span style={{ fontSize: 18 }}>🎉</span>
                 <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 15 }}>Version {checkState.latest} is available</span>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 16 }}>
                 You're running <strong style={{ color: 'var(--text)' }}>v{checkState.current}</strong>.
-                {checkState.assetSize > 0 && <span style={{ color: 'var(--text3)' }}> Download size: {fmtBytes(checkState.assetSize)}.</span>}
               </div>
               <button className="btn btn-primary" style={{ fontSize: 14, padding: '10px 24px' }} onClick={handleDownload}>
-                ↓ Download &amp; Install v{checkState.latest}
+                ↓ Download Update
               </button>
-              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
-                {isMac
-                  ? 'The installer will download and open automatically. Drag the app to Applications when prompted.'
-                  : 'The installer will download and run automatically. Follow the prompts to complete the update.'}
-              </div>
             </div>
           )}
 
-          {/* ── Download progress ── */}
-          {(dlState.status === 'downloading' || dlState.status === 'opening') && (
+          {dlState.status === 'downloading' && (
             <div style={{ padding: '16px', borderRadius: 8, background: 'rgba(52,152,219,0.08)', border: '1px solid rgba(52,152,219,0.25)' }}>
               <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--blue)', marginBottom: 10 }}>
-                {dlState.status === 'opening' ? 'Opening installer…' : `Downloading… ${dlState.percent}%`}
+                Downloading… {dlState.percent}%
               </div>
-              {/* Progress bar */}
               <div style={{ height: 6, background: 'var(--border)', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{
-                  height: '100%', borderRadius: 4,
-                  background: 'var(--blue)',
-                  width: `${dlState.status === 'downloading' ? dlState.percent : 100}%`,
-                  transition: 'width 0.3s ease',
-                }} />
+                <div style={{ height: '100%', borderRadius: 4, background: 'var(--blue)', width: `${dlState.percent}%`, transition: 'width 0.3s ease' }} />
               </div>
-              {dlState.status === 'downloading' && dlState.total > 0 && (
+              {dlState.total > 0 && (
                 <div style={{ fontSize: 11, color: 'var(--text3)' }}>
                   {fmtBytes(dlState.downloaded)} / {fmtBytes(dlState.total)}
                 </div>
@@ -175,47 +150,37 @@ export default function AboutScreen() {
             </div>
           )}
 
-          {/* ── Done ── */}
-          {dlState.status === 'done' && (
+          {dlState.status === 'ready' && (
             <div style={{ padding: '16px', borderRadius: 8, background: 'rgba(46,204,113,0.08)', border: '1px solid rgba(46,204,113,0.25)' }}>
-              <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: 14, marginBottom: 8 }}>✓ Installer opened</div>
-              {isMac ? (
-                <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.7 }}>
-                  A DMG window has opened in Finder.<br />
-                  <strong style={{ color: 'var(--text)' }}>Drag Feemo Budget Builder into your Applications folder</strong> to finish the update.<br />
-                  Then close this version and launch the new one from Applications.
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.7 }}>
-                  The installer is running. <strong style={{ color: 'var(--text)' }}>Follow the prompts</strong> — click Yes on the security dialog to allow the update.<br />
-                  The app will relaunch automatically when the install is complete.
-                </div>
-              )}
+              <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: 14, marginBottom: 8 }}>✓ Update downloaded</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 14 }}>
+                Restart the app to apply the update. Your work will be saved automatically.
+              </div>
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 13, background: 'var(--green)', borderColor: 'var(--green)' }}
+                onClick={() => window.electronAPI?.installUpdate()}
+              >
+                ↺ Restart &amp; Apply
+              </button>
             </div>
           )}
 
-          {/* ── Error ── */}
-          {(checkState.status === 'error' || dlState.status === 'error') && (
+          {dlState.status === 'error' && (
             <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.25)' }}>
-              <div style={{ fontWeight: 600, color: 'var(--red)', fontSize: 13, marginBottom: 4 }}>
-                {dlState.status === 'error' ? 'Download failed' : 'Could not check for updates'}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                {dlState.status === 'error' ? dlState.message : (checkState as { message: string }).message}
-              </div>
-              {checkState.status === 'update-available' && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ marginTop: 10 }}
-                  onClick={() => window.electronAPI?.openExternal(checkState.releasePageUrl)}
-                >
-                  Open release page instead →
-                </button>
-              )}
+              <div style={{ fontWeight: 600, color: 'var(--red)', fontSize: 13, marginBottom: 4 }}>Download failed</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{dlState.message}</div>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={() => setDlState({ status: 'idle' })}>Try again</button>
             </div>
           )}
 
-          {/* ── Action row ── */}
+          {checkState.status === 'error' && (
+            <div style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.25)' }}>
+              <div style={{ fontWeight: 600, color: 'var(--red)', fontSize: 13, marginBottom: 4 }}>Could not check for updates</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{checkState.message}</div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               className="btn btn-ghost"
@@ -236,7 +201,6 @@ export default function AboutScreen() {
         </div>
       </div>
 
-      {/* Links */}
       <div style={{ marginTop: 20, display: 'flex', gap: 16, fontSize: 12 }}>
         <button className="btn btn-ghost btn-sm" onClick={() => window.electronAPI?.openExternal('https://github.com/omokwejames-feemo/feemo-budget-builder/releases')}>
           Release History

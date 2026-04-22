@@ -14,7 +14,7 @@ autoUpdater.on('update-available', (info) => {
   const body = typeof info.releaseNotes === 'string'
     ? info.releaseNotes
     : Array.isArray(info.releaseNotes)
-      ? info.releaseNotes.map((n: { note?: string }) => n.note ?? '').join('\n')
+      ? info.releaseNotes.map(n => n.note || '').join('\n')
       : ''
   mainWindow?.webContents.send('update-available', { version: info.version, body })
 })
@@ -170,7 +170,7 @@ ipcMain.handle('check-for-updates', async () => {
     const body = typeof result.updateInfo.releaseNotes === 'string'
       ? result.updateInfo.releaseNotes
       : Array.isArray(result.updateInfo.releaseNotes)
-        ? result.updateInfo.releaseNotes.map((n: { note?: string }) => n.note ?? '').join('\n')
+        ? result.updateInfo.releaseNotes.map(n => n.note || '').join('\n')
         : ''
     return { success: true, current, latest, hasUpdate, body }
   } catch (err) {
