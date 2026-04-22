@@ -1,6 +1,6 @@
 {
   "name": "feemo-budget-manager",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Feemo Budget Manager — Smart Production Budget Generator",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -38,6 +38,7 @@
     "appId": "com.feemovision.budget-manager",
     "productName": "Feemo Budget Manager",
     "asar": true,
+    "artifactName": "Feemo-Budget-Manager-${version}-${arch}.${ext}",
     "publish": {
       "provider": "github",
       "owner": "omokwejames-feemo",
@@ -75,12 +76,11 @@
     },
     "win": {
       "icon": "public/icon-1024.png",
+      "artifactName": "Feemo-Budget-Manager-Setup-${version}.${ext}",
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ]
     },
