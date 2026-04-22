@@ -8,7 +8,13 @@ import { google } from 'googleapis'
 // ── Auto-updater setup ────────────────────────────────────────────────────────
 
 autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = true
+// Keep false so Squirrel.Mac does NOT start during downloadUpdate().
+// With true, Squirrel starts during the download and the "Restart & Apply"
+// button appears before Squirrel finishes — quitAndInstall() then silently
+// waits forever. With false, quitAndInstall() triggers Squirrel at click-time
+// via the already-running localhost proxy (fast, < 1 s), then Squirrel
+// calls nativeUpdater.quitAndInstall() itself once the zip is processed.
+autoUpdater.autoInstallOnAppQuit = false
 
 autoUpdater.on('update-available', (info) => {
   const body = typeof info.releaseNotes === 'string'
@@ -205,20 +211,22 @@ ipcMain.handle('download-update', async () => {
 ipcMain.handle('install-update', () => {
   // Defer past the IPC response so the renderer receives the reply before quit.
   setImmediate(() => {
+    // quitAndInstall() triggers Squirrel.Mac to fetch the zip from the already-
+    // running localhost proxy, process it, then call nativeUpdater.quitAndInstall()
+    // which quits + relaunches.  Because autoInstallOnAppQuit=false, Squirrel has
+    // NOT run yet, so the proxy zip is ready and the call succeeds immediately.
     try {
       autoUpdater.quitAndInstall(true, true)
     } catch {}
 
-    // Always force-quit after 800 ms regardless of what quitAndInstall did.
-    // If quitAndInstall already killed this process the timer is in a dead
-    // process and never fires. If it silently did nothing (common on unsigned
-    // macOS builds where Squirrel aborts), this guarantees the app closes.
-    // autoInstallOnAppQuit=true means electron-updater's quit hook will apply
-    // the downloaded update when app.quit() fires.
+    // Safety net: if Squirrel fails on this system (e.g. SIP, wrong location)
+    // and the app is still alive after 15 s, force close it.  15 s is enough
+    // for Squirrel to download ~100 MB via localhost; in practice < 2 s.
+    // If quitAndInstall already killed the process this timer never fires.
     setTimeout(() => {
       app.relaunch()
       app.quit()
-    }, 800)
+    }, 15000)
   })
 })
 
