@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   useBudgetStore, DEPARTMENTS, DeptCode,
   isSeriesFormat, isTelenovela, isEpisodic,
@@ -61,12 +61,27 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
     installments, setInstallments,
     deptAllocations, setDeptAllocation,
     resetStore, resetTimeline, resetInstallments, resetDeptAllocations,
+    companyProfile, setCompanyProfile,
   } = useBudgetStore()
 
   const [autofillConfirm, setAutofillConfirm] = useState<'juriya' | 'bc' | null>(null)
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'parsing' | 'done' | 'error'>('idle')
   const [uploadMsg, setUploadMsg] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const handleLogoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const dataUrl = ev.target?.result as string
+      setCompanyProfile({ logoDataUrl: dataUrl })
+    }
+    reader.readAsDataURL(file)
+    if (logoInputRef.current) logoInputRef.current.value = ''
+  }, [setCompanyProfile])
 
   const isSeries = isSeriesFormat(project.format)
   const isTele = isTelenovela(project.format)
@@ -168,6 +183,120 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
       <div className="screen-header">
         <div className="screen-title">Assumptions Dashboard</div>
         <div className="screen-sub">All other sheets auto-calculate from inputs here.</div>
+      </div>
+
+      {/* ── Company Profile ── */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">Company Profile</span>
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>Optional — appears on all exported documents</span>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+            {/* Logo upload */}
+            <div style={{ flexShrink: 0 }}>
+              <div
+                onClick={() => logoInputRef.current?.click()}
+                style={{
+                  width: 88, height: 88, borderRadius: 10,
+                  border: '2px dashed var(--border)',
+                  background: 'var(--bg3)',
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', overflow: 'hidden',
+                  transition: 'border-color 0.15s',
+                  position: 'relative',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+              >
+                {companyProfile.logoDataUrl ? (
+                  <>
+                    <img
+                      src={companyProfile.logoDataUrl}
+                      alt="Company logo"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'rgba(0,0,0,0.5)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: 0, transition: 'opacity 0.15s',
+                      fontSize: 11, color: '#fff', fontWeight: 600,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
+                    >
+                      Change
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 22, marginBottom: 4 }}>🖼</span>
+                    <span style={{ fontSize: 9, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.3 }}>Upload Logo</span>
+                  </>
+                )}
+              </div>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg"
+                style={{ display: 'none' }}
+                onChange={handleLogoUpload}
+              />
+              {companyProfile.logoDataUrl && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ width: '100%', marginTop: 4, fontSize: 10 }}
+                  onClick={() => setCompanyProfile({ logoDataUrl: '' })}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+
+            {/* Fields */}
+            <div style={{ flex: 1 }}>
+              <div className="form-grid form-grid-2" style={{ marginBottom: 10 }}>
+                <div className="field">
+                  <label>Company Name</label>
+                  <input
+                    value={companyProfile.name}
+                    onChange={e => setCompanyProfile({ name: e.target.value })}
+                    placeholder="e.g. Feemovision"
+                  />
+                </div>
+                <div className="field">
+                  <label>Contact Email</label>
+                  <input
+                    type="email"
+                    value={companyProfile.email}
+                    onChange={e => setCompanyProfile({ email: e.target.value })}
+                    placeholder="e.g. info@feemovision.com"
+                  />
+                </div>
+              </div>
+              <div className="form-grid form-grid-2">
+                <div className="field">
+                  <label>Company Address</label>
+                  <input
+                    value={companyProfile.address}
+                    onChange={e => setCompanyProfile({ address: e.target.value })}
+                    placeholder="e.g. 12 Film House, Lagos"
+                  />
+                </div>
+                <div className="field">
+                  <label>Contact Phone</label>
+                  <input
+                    value={companyProfile.phone}
+                    onChange={e => setCompanyProfile({ phone: e.target.value })}
+                    placeholder="e.g. +234 800 000 0000"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Project Details ── */}

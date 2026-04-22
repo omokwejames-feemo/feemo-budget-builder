@@ -1,7 +1,7 @@
 {
-  "name": "feemo-budget-builder",
-  "version": "1.3.0",
-  "description": "Feemo Budget Builder — Smart Production Budget Generator",
+  "name": "feemo-budget-manager",
+  "version": "1.4.0",
+  "description": "Feemo Budget Manager — Smart Production Budget Generator",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev:vite": "vite --port 5173",
@@ -15,6 +15,7 @@
   "license": "MIT",
   "dependencies": {
     "exceljs": "^4.4.0",
+    "googleapis": "^171.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.2"
@@ -33,8 +34,8 @@
     "vite-plugin-electron-renderer": "^0.14.5"
   },
   "build": {
-    "appId": "com.feemovision.budget-builder",
-    "productName": "Feemo Budget Builder",
+    "appId": "com.feemovision.budget-manager",
+    "productName": "Feemo Budget Manager",
     "asar": true,
     "publish": null,
     "directories": {
@@ -45,14 +46,37 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "fileAssociations": [
+      {
+        "ext": "feemo",
+        "name": "Feemo Project",
+        "description": "Feemo Budget Manager Project",
+        "role": "Editor"
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "public/icon.icns",
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "win": {
       "icon": "public/icon-1024.png",
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

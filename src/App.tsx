@@ -8,22 +8,28 @@ import ProductionForecast from './screens/ProductionForecast'
 import ExportScreen from './screens/ExportScreen'
 import FileScreen from './screens/FileScreen'
 import AboutScreen from './screens/AboutScreen'
+import PaymentScheduleCreator from './screens/PaymentScheduleCreator'
+import ExpenditureTracker from './screens/ExpenditureTracker'
+import RebuildFromFiles from './screens/RebuildFromFiles'
 import UpdateDialog from './components/UpdateDialog'
 import OpenProjectDialog from './components/OpenProjectDialog'
+import BetaGate from './components/BetaGate'
 import { useRecentProjects } from './hooks/useRecentProjects'
 import { useIssueDetector } from './hooks/useIssueDetector'
 import './App.css'
 
-type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'export' | 'file' | 'about'
+type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'payments' | 'expenditure' | 'export' | 'file' | 'about'
 
 const NAV: { id: Screen; label: string; icon: string }[] = [
-  { id: 'assumptions', label: 'Assumptions',        icon: '⚙'  },
-  { id: 'budget',      label: 'Production Budget',  icon: '₦'  },
-  { id: 'salary',      label: 'Salary Forecast',    icon: '👥' },
-  { id: 'forecast',    label: 'Production Forecast',icon: '📈' },
-  { id: 'export',      label: 'Export',             icon: '↓'  },
-  { id: 'file',        label: 'File',               icon: '🗂' },
-  { id: 'about',       label: 'About',              icon: 'ℹ'  },
+  { id: 'assumptions',  label: 'Assumptions',         icon: '⚙'  },
+  { id: 'budget',       label: 'Production Budget',   icon: '₦'  },
+  { id: 'salary',       label: 'Salary Forecast',     icon: '👥' },
+  { id: 'forecast',     label: 'Production Forecast', icon: '📈' },
+  { id: 'payments',     label: 'Payment Schedules',   icon: '📋' },
+  { id: 'expenditure',  label: 'Expenditure Tracker', icon: '📊' },
+  { id: 'export',       label: 'Export',              icon: '↓'  },
+  { id: 'file',         label: 'File',                icon: '🗂' },
+  { id: 'about',        label: 'About',               icon: 'ℹ'  },
 ]
 
 interface PendingUpdate {
@@ -36,7 +42,8 @@ interface PendingUpdate {
 }
 
 export default function App() {
-  const [appView, setAppView] = useState<'home' | 'app'>('home')
+  const [accessGranted, setAccessGranted] = useState(false)
+  const [appView, setAppView] = useState<'home' | 'app' | 'rebuild'>('home')
   const [screen, setScreen] = useState<Screen>('assumptions')
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -49,6 +56,29 @@ export default function App() {
   const isFirstMount = useRef(true)
   const { recents, addRecent, removeRecent } = useRecentProjects()
   const issues = useIssueDetector()
+
+  // Handle double-click file open from the OS (fires after renderer is ready)
+  useEffect(() => {
+    window.electronAPI?.onOpenFile(async (filePath) => {
+      if (!window.electronAPI) return
+      const result = await window.electronAPI.readFileByPath(filePath)
+      if (!result.success || !result.data) return
+      try {
+        const parsed = JSON.parse(result.data)
+        store.loadState(parsed)
+        setCurrentFilePath(filePath)
+        addRecent(filePath)
+        setHasUnsavedChanges(false)
+        isFirstMount.current = true
+        setScreen('assumptions')
+        setAccessGranted(true)
+        setAppView('app')
+      } catch {
+        // malformed file — ignore
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Silent background check on launch
   useEffect(() => {
@@ -103,6 +133,9 @@ export default function App() {
       lineItems: s.lineItems,
       salaryRoles: s.salaryRoles,
       forecastOverrides: s.forecastOverrides,
+      companyProfile: s.companyProfile,
+      paymentSchedules: s.paymentSchedules,
+      expenditureDeductions: s.expenditureDeductions,
     }, null, 2)
   }
 
@@ -161,7 +194,13 @@ export default function App() {
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (window.electronAPI && currentFilePath) {
+      // Write back to the file that is currently open
+      const data = getSerializableState()
+      await window.electronAPI.saveProject(data, currentFilePath)
+    }
+    // Zustand persist also keeps state in localStorage as a backup
     setHasUnsavedChanges(false)
     setSaveToast(true)
     setTimeout(() => setSaveToast(false), 2000)
@@ -194,10 +233,24 @@ export default function App() {
   const hasForecastWarnings = forecastIssues.length > 0
   const updateAvailable = pendingUpdate !== null
 
+  if (!accessGranted) {
+    return <BetaGate onGranted={() => setAccessGranted(true)} />
+  }
+
+  if (appView === 'rebuild') {
+    return (
+      <RebuildFromFiles onRebuilt={() => {
+        setScreen('assumptions')
+        setAppView('app')
+        isFirstMount.current = true
+      }} />
+    )
+  }
+
   if (appView === 'home') {
     return (
       <>
-        <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} recents={recents} onOpenRecent={doOpenRecent} />
+        <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} recents={recents} onOpenRecent={doOpenRecent} onRebuild={() => setAppView('rebuild')} />
         {showOpenDialog && (
           <OpenProjectDialog
             recents={recents}
@@ -220,10 +273,23 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="brand-logo">F</span>
+          <div style={{ width: 32, height: 32, flexShrink: 0 }}>
+            <img
+              src="/feemo-logo.png"
+              alt="F"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              onError={e => {
+                const el = e.currentTarget
+                el.style.display = 'none'
+                const fb = el.nextElementSibling as HTMLElement | null
+                if (fb) fb.style.display = 'flex'
+              }}
+            />
+            <span className="brand-logo" style={{ display: 'none' }}>F</span>
+          </div>
           <div>
             <div className="brand-name">Feemo</div>
-            <div className="brand-sub">Budget Builder</div>
+            <div className="brand-sub">Budget Manager</div>
           </div>
         </div>
 
@@ -274,6 +340,8 @@ export default function App() {
         {screen === 'budget'      && <ProductionBudget />}
         {screen === 'salary'      && <SalaryForecast />}
         {screen === 'forecast'    && <ProductionForecast issues={forecastIssues} />}
+        {screen === 'payments'    && <PaymentScheduleCreator />}
+        {screen === 'expenditure' && <ExpenditureTracker />}
         {screen === 'export'      && <ExportScreen />}
         {screen === 'about'       && <AboutScreen />}
         {screen === 'file' && (
@@ -284,6 +352,7 @@ export default function App() {
             onSaveAs={handleSaveAs}
             onOpen={handleOpenProject}
             onClose={handleClose}
+            getSerializableState={getSerializableState}
           />
         )}
       </main>

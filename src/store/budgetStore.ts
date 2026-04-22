@@ -41,6 +41,51 @@ export interface Installment {
   month: number
 }
 
+export interface CompanyProfile {
+  logoDataUrl: string   // base64 data URL of company logo
+  name: string
+  address: string
+  email: string
+  phone: string
+}
+
+export interface PaymentScheduleRow {
+  id: string
+  payeeName: string
+  description: string
+  budgetCode: string    // must match a DeptCode
+  department: string    // auto-resolved from budgetCode
+  bankName: string
+  accountNumber: string
+  paymentValue: number
+  vatRate: number       // % — may differ from global
+  whtRate: number       // % — may differ from global
+  // amountPayable = paymentValue + (paymentValue * vatRate/100) - (paymentValue * whtRate/100)
+}
+
+export interface PaymentSchedule {
+  id: string
+  scheduleNumber: string  // e.g. PS-001
+  globalVatRate: number
+  globalWhtRate: number
+  rows: PaymentScheduleRow[]
+  preparedBy: string
+  reviewedBy: string
+  approvedBy: string
+  createdAt: string
+  status: 'draft' | 'exported' | 'approved'
+  signedPdfPath?: string
+}
+
+export interface ExpenditureDeduction {
+  scheduleId: string
+  scheduleNumber: string
+  budgetCode: string
+  department: string
+  amount: number
+  approvedAt: string
+}
+
 export interface ProjectDetails {
   title: string
   company: string
@@ -93,6 +138,10 @@ export interface BudgetState {
   lineItems: Record<DeptCode, LineItem[]>
   salaryRoles: SalaryRole[]
   forecastOverrides: Record<string, number> // key: `${deptCode}_${month}`
+  companyProfile: CompanyProfile
+  paymentSchedules: PaymentSchedule[]
+  expenditureDeductions: ExpenditureDeduction[]
+  lastDriveSave: string | null // ISO timestamp
 
   setProject: (p: Partial<ProjectDetails>) => void
   setTimeline: (t: Partial<Timeline>) => void
@@ -108,11 +157,18 @@ export interface BudgetState {
   removeSalaryRole: (id: string) => void
   setForecastOverride: (key: string, value: number) => void
   clearForecastOverrides: () => void
+  setCompanyProfile: (p: Partial<CompanyProfile>) => void
+  addPaymentSchedule: (s: PaymentSchedule) => void
+  updatePaymentSchedule: (id: string, updates: Partial<PaymentSchedule>) => void
+  removePaymentSchedule: (id: string) => void
+  addExpenditureDeduction: (d: ExpenditureDeduction) => void
+  removeExpenditureDeductions: (scheduleId: string) => void
+  setLastDriveSave: (ts: string) => void
   resetStore: () => void
   resetTimeline: () => void
   resetInstallments: () => void
   resetDeptAllocations: () => void
-  loadState: (state: Partial<Pick<BudgetState, 'project' | 'timeline' | 'installments' | 'deptAllocations' | 'lineItems' | 'salaryRoles' | 'forecastOverrides'>>) => void
+  loadState: (state: Partial<Pick<BudgetState, 'project' | 'timeline' | 'installments' | 'deptAllocations' | 'lineItems' | 'salaryRoles' | 'forecastOverrides' | 'companyProfile' | 'paymentSchedules' | 'expenditureDeductions'>>) => void
 }
 
 const defaultProject: ProjectDetails = {
@@ -146,6 +202,14 @@ const defaultAllocations = Object.fromEntries(
 
 const defaultInstallments: Installment[] = []
 
+const defaultCompanyProfile: CompanyProfile = {
+  logoDataUrl: '',
+  name: '',
+  address: '',
+  email: '',
+  phone: '',
+}
+
 const initialState = {
   project: defaultProject,
   timeline: defaultTimeline,
@@ -154,6 +218,10 @@ const initialState = {
   lineItems: Object.fromEntries(DEPARTMENTS.map(d => [d.code, []])) as unknown as Record<DeptCode, LineItem[]>,
   salaryRoles: [] as SalaryRole[],
   forecastOverrides: {} as Record<string, number>,
+  companyProfile: defaultCompanyProfile,
+  paymentSchedules: [] as PaymentSchedule[],
+  expenditureDeductions: [] as ExpenditureDeduction[],
+  lastDriveSave: null as string | null,
 }
 
 export const useBudgetStore = create<BudgetState>()(
@@ -193,6 +261,17 @@ export const useBudgetStore = create<BudgetState>()(
       setForecastOverride: (key, value) =>
         set(s => ({ forecastOverrides: { ...s.forecastOverrides, [key]: value } })),
       clearForecastOverrides: () => set({ forecastOverrides: {} }),
+      setCompanyProfile: (p) => set(s => ({ companyProfile: { ...s.companyProfile, ...p } })),
+      addPaymentSchedule: (s2) => set(s => ({ paymentSchedules: [...s.paymentSchedules, s2] })),
+      updatePaymentSchedule: (id, updates) =>
+        set(s => ({ paymentSchedules: s.paymentSchedules.map(ps => ps.id === id ? { ...ps, ...updates } : ps) })),
+      removePaymentSchedule: (id) =>
+        set(s => ({ paymentSchedules: s.paymentSchedules.filter(ps => ps.id !== id) })),
+      addExpenditureDeduction: (d) =>
+        set(s => ({ expenditureDeductions: [...s.expenditureDeductions, d] })),
+      removeExpenditureDeductions: (scheduleId) =>
+        set(s => ({ expenditureDeductions: s.expenditureDeductions.filter(d => d.scheduleId !== scheduleId) })),
+      setLastDriveSave: (ts) => set({ lastDriveSave: ts }),
       resetStore: () => set(initialState),
       resetTimeline: () => set({ timeline: defaultTimeline }),
       resetInstallments: () => set({ installments: [] }),
@@ -209,6 +288,10 @@ export const useBudgetStore = create<BudgetState>()(
         lineItems: s.lineItems,
         salaryRoles: s.salaryRoles,
         forecastOverrides: s.forecastOverrides,
+        companyProfile: s.companyProfile,
+        paymentSchedules: s.paymentSchedules,
+        expenditureDeductions: s.expenditureDeductions,
+        lastDriveSave: s.lastDriveSave,
       }),
     }
   )

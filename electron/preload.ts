@@ -31,4 +31,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeDownloadProgressListener: () => {
     ipcRenderer.removeAllListeners('download-progress')
   },
+
+  // ── PDF export ───────────────────────────────────────────────────────────
+  printToPdf: (html: string, defaultName: string) =>
+    ipcRenderer.invoke('print-to-pdf', { html, defaultName }),
+
+  // ── File-open from OS (double-click) ─────────────────────────────────────
+  onOpenFile: (cb: (filePath: string) => void) => {
+    ipcRenderer.removeAllListeners('open-file')
+    ipcRenderer.on('open-file', (_event, filePath: string) => cb(filePath))
+  },
+
+  // ── Google Drive ─────────────────────────────────────────────────────────
+  gdriveSetCredentials: (clientId: string, clientSecret: string) =>
+    ipcRenderer.invoke('gdrive-set-credentials', { clientId, clientSecret }),
+  gdriveGetCredentials: () =>
+    ipcRenderer.invoke('gdrive-get-credentials'),
+  gdriveHasToken: () =>
+    ipcRenderer.invoke('gdrive-has-token'),
+  gdriveAuthorize: () =>
+    ipcRenderer.invoke('gdrive-authorize'),
+  gdriveUpload: (data: string, fileName: string) =>
+    ipcRenderer.invoke('gdrive-upload', { data, fileName }),
+  gdriveDisconnect: () =>
+    ipcRenderer.invoke('gdrive-disconnect'),
 })

@@ -15,9 +15,10 @@ interface HomeScreenProps {
   onOpenProject: () => void
   recents: RecentProject[]
   onOpenRecent: (filePath: string) => void
+  onRebuild: () => void
 }
 
-export default function HomeScreen({ onNewProject, onOpenProject, recents, onOpenRecent }: HomeScreenProps) {
+export default function HomeScreen({ onNewProject, onOpenProject, recents, onOpenRecent, onRebuild }: HomeScreenProps) {
   return (
     <div style={{
       height: '100vh',
@@ -29,50 +30,79 @@ export default function HomeScreen({ onNewProject, onOpenProject, recents, onOpe
       gap: 0,
     }}>
       {/* Logo */}
-      <div style={{
-        width: 72, height: 72,
-        background: 'var(--accent)', color: '#000',
-        fontWeight: 800, fontSize: 40, borderRadius: 16,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: 24,
-        boxShadow: '0 8px 32px rgba(245,166,35,0.3)',
-      }}>F</div>
+      <div style={{ width: 96, height: 96, marginBottom: 20 }}>
+        <img
+          src="/feemo-logo.png"
+          alt="Feemovision"
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          onError={e => {
+            const el = e.currentTarget
+            el.style.display = 'none'
+            const fallback = el.nextElementSibling as HTMLElement | null
+            if (fallback) fallback.style.display = 'flex'
+          }}
+        />
+        <div style={{
+          display: 'none',
+          width: 96, height: 96,
+          background: 'var(--accent)', color: '#000',
+          fontWeight: 800, fontSize: 48, borderRadius: 20,
+          alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 8px 32px rgba(245,166,35,0.3)',
+        }}>F</div>
+      </div>
 
       <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', marginBottom: 8, letterSpacing: '-0.02em' }}>
-        Feemo Budget Builder
+        Feemo Budget Manager
       </div>
       <div style={{ fontSize: 14, color: 'var(--text3)', marginBottom: 40 }}>
-        Smart production budget generator by Feemovision
+        Smart production budget manager by Feemovision
       </div>
 
-      <div style={{ display: 'flex', gap: 14, marginBottom: recents.length > 0 ? 40 : 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: recents.length > 0 ? 40 : 0 }}>
+        <div style={{ display: 'flex', gap: 14 }}>
+          <button
+            onClick={onNewProject}
+            style={{
+              padding: '14px 32px',
+              background: 'var(--accent)', color: '#000',
+              fontWeight: 700, fontSize: 15,
+              border: 'none', borderRadius: 8, cursor: 'pointer',
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          >
+            + New Project
+          </button>
+          <button
+            onClick={onOpenProject}
+            style={{
+              padding: '14px 32px',
+              background: 'transparent', color: 'var(--text)',
+              fontWeight: 600, fontSize: 15,
+              border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer',
+              transition: 'border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)' }}
+          >
+            Open Project…
+          </button>
+        </div>
         <button
-          onClick={onNewProject}
+          onClick={onRebuild}
           style={{
-            padding: '14px 32px',
-            background: 'var(--accent)', color: '#000',
-            fontWeight: 700, fontSize: 15,
-            border: 'none', borderRadius: 8, cursor: 'pointer',
-            transition: 'opacity 0.15s',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-        >
-          + New Project
-        </button>
-        <button
-          onClick={onOpenProject}
-          style={{
-            padding: '14px 32px',
-            background: 'transparent', color: 'var(--text)',
-            fontWeight: 600, fontSize: 15,
-            border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer',
+            padding: '10px 24px',
+            background: 'transparent', color: 'var(--text3)',
+            fontWeight: 600, fontSize: 13,
+            border: '1px dashed var(--border)', borderRadius: 8, cursor: 'pointer',
             transition: 'border-color 0.15s, color 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text2)'; e.currentTarget.style.color = 'var(--text)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text3)' }}
         >
-          Open Project…
+          ↑ Rebuild from Files
         </button>
       </div>
 
@@ -109,7 +139,7 @@ export default function HomeScreen({ onNewProject, onOpenProject, recents, onOpe
       )}
 
       <div style={{ marginTop: 48, fontSize: 11, color: 'var(--text3)' }}>
-        v1.3 · Feemovision
+        v1.4 · Feemovision
       </div>
     </div>
   )
