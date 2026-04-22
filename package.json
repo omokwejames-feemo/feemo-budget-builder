@@ -1,6 +1,6 @@
 {
   "name": "feemo-budget-manager",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Feemo Budget Manager — Smart Production Budget Generator",
   "main": "dist-electron/main.js",
   "scripts": {
