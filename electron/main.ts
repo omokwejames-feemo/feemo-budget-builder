@@ -1,20 +1,19 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { writeFile as writeFileAsync, readFile as readFileAsync, unlink } from 'fs/promises'
+import { spawn } from 'child_process'
+import { tmpdir } from 'os'
 import { createServer } from 'http'
 import { google } from 'googleapis'
 
 // ── Auto-updater setup ────────────────────────────────────────────────────────
 
 autoUpdater.autoDownload = false
-// Keep false so Squirrel.Mac does NOT start during downloadUpdate().
-// With true, Squirrel starts during the download and the "Restart & Apply"
-// button appears before Squirrel finishes — quitAndInstall() then silently
-// waits forever. With false, quitAndInstall() triggers Squirrel at click-time
-// via the already-running localhost proxy (fast, < 1 s), then Squirrel
-// calls nativeUpdater.quitAndInstall() itself once the zip is processed.
 autoUpdater.autoInstallOnAppQuit = false
+
+// Track the downloaded zip path so we can apply it ourselves (bypassing Squirrel.Mac)
+let downloadedZipPath: string | null = null
 
 autoUpdater.on('update-available', (info) => {
   const body = typeof info.releaseNotes === 'string'
@@ -33,7 +32,9 @@ autoUpdater.on('download-progress', (progress) => {
   })
 })
 
-autoUpdater.on('update-downloaded', () => {
+autoUpdater.on('update-downloaded', (event: any) => {
+  // Capture the zip path before Squirrel.Mac can interfere with it
+  downloadedZipPath = event?.downloadedFile ?? null
   mainWindow?.webContents.send('update-downloaded')
 })
 
@@ -210,19 +211,48 @@ ipcMain.handle('download-update', async () => {
 
 ipcMain.handle('install-update', () => {
   // Defer past the IPC response so the renderer receives the reply before quit.
-  setImmediate(() => {
-    // quitAndInstall() triggers Squirrel.Mac to fetch the zip from the already-
-    // running localhost proxy, process it, then call nativeUpdater.quitAndInstall()
-    // which quits + relaunches.  Because autoInstallOnAppQuit=false, Squirrel has
-    // NOT run yet, so the proxy zip is ready and the call succeeds immediately.
+  setImmediate(async () => {
+    // ── macOS: shell-script updater (bypasses Squirrel.Mac entirely) ──────────
+    // Squirrel.Mac is unreliable for unsigned apps — quitAndInstall() may
+    // silently do nothing.  Instead we write a tiny bash script that runs
+    // detached after the app exits: it extracts the downloaded zip, copies the
+    // new .app bundle over the current one, and relaunches.
+    if (process.platform === 'darwin' && app.isPackaged && downloadedZipPath) {
+      // e.g. /Applications/Feemo Budget Manager.app/Contents/MacOS/<bin>
+      // → go up 3 levels → /Applications/Feemo Budget Manager.app
+      const appBundlePath = dirname(dirname(dirname(process.execPath)))
+
+      const script = `#!/bin/bash
+sleep 3
+EXTRACT=$(mktemp -d)
+unzip -q -o "$1" -d "$EXTRACT" 2>/dev/null
+APP=$(find "$EXTRACT" -maxdepth 2 -name "*.app" | head -1)
+if [ -n "$APP" ]; then
+  xattr -rc "$APP" 2>/dev/null || true
+  cp -Rf "$APP/." "$2/"
+  open "$2"
+fi
+rm -rf "$EXTRACT"
+`
+      try {
+        const scriptPath = join(tmpdir(), 'feemo-updater.sh')
+        await writeFileAsync(scriptPath, script, { mode: 0o755 })
+        const child = spawn('/bin/bash', [scriptPath, downloadedZipPath, appBundlePath], {
+          detached: true,
+          stdio: 'ignore',
+        })
+        child.unref()
+        app.quit()
+        return
+      } catch {
+        // fall through to quitAndInstall below
+      }
+    }
+
+    // ── Windows / fallback ────────────────────────────────────────────────────
     try {
       autoUpdater.quitAndInstall(true, true)
     } catch {}
-
-    // Safety net: if Squirrel fails on this system (e.g. SIP, wrong location)
-    // and the app is still alive after 15 s, force close it.  15 s is enough
-    // for Squirrel to download ~100 MB via localhost; in practice < 2 s.
-    // If quitAndInstall already killed the process this timer never fires.
     setTimeout(() => {
       app.relaunch()
       app.quit()
