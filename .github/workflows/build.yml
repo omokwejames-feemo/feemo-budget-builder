@@ -98,9 +98,13 @@ jobs:
           files: ./artifacts/*
           make_latest: true
           body: |
-            ## Feemo Budget Manager v${{ steps.version.outputs.version }}
+            ## What's new in v${{ steps.version.outputs.version }}
 
-            Download the installer for your platform:
+            - Fix: in-app update now restarts and applies correctly without re-installing
+            - Fix: update changelog now displays cleanly without markdown symbols
+            - Improved app icon with proper macOS squircle shape
+            - Feemovision logo replaces F placeholder throughout the app
 
-            - **Mac** → download the `.dmg` file, open it, drag the app to Applications
-            - **Windows** → download the `.exe` file and run the installer
+            ---
+            Mac: download the .dmg — open it and drag to Applications for first install.
+            Windows: download the .exe and run the installer.

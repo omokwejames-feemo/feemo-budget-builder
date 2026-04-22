@@ -188,7 +188,16 @@ ipcMain.handle('download-update', async () => {
 })
 
 ipcMain.handle('install-update', () => {
-  autoUpdater.quitAndInstall()
+  // setImmediate lets the IPC response return before the app quits,
+  // otherwise the invoke() in the renderer hangs and blocks the quit.
+  setImmediate(() => {
+    try {
+      autoUpdater.quitAndInstall(false, true)
+    } catch {
+      app.relaunch()
+      app.exit(0)
+    }
+  })
 })
 
 ipcMain.handle('open-external', (_event, url: string) => {

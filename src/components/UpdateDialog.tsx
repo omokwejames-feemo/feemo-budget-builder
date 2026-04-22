@@ -19,10 +19,24 @@ function fmtBytes(b: number) {
 
 function renderChangelog(body: string): string[] {
   if (!body.trim()) return []
+  const skipPatterns = [
+    /download/i, /installer/i, /\.dmg/i, /\.exe/i,
+    /drag.*applications/i, /applications.*folder/i,
+    /^install/i, /^platform/i,
+  ]
   return body
     .split('\n')
-    .map(l => l.replace(/^#{1,3}\s*/, '').replace(/^\*+\s*/, '• ').replace(/^-\s*/, '• ').trim())
-    .filter(l => l.length > 0)
+    .map(line =>
+      line
+        .replace(/^#{1,6}\s*/, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/^\s*[-*+]\s+/, '• ')
+        .replace(/^\s*\d+\.\s+/, '• ')
+        .trim()
+    )
+    .filter(l => l.length > 0 && !skipPatterns.some(p => p.test(l)))
 }
 
 interface UpdateDialogProps {
