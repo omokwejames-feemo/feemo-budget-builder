@@ -205,15 +205,27 @@ ipcMain.handle('download-update', async () => {
 ipcMain.handle('install-update', () => {
   // Defer past the IPC response so the renderer receives the reply before quit.
   setImmediate(() => {
+    let quitStarted = false
+    const onBeforeQuit = () => { quitStarted = true }
+    app.once('before-quit', onBeforeQuit)
+
     try {
-      // isSilent=true avoids the native macOS update dialog (fails for unsigned apps).
-      // isForceRunAfter=true relaunches the app after the update is applied.
+      // isSilent=true skips the native macOS update dialog (fails for unsigned apps).
+      // isForceRunAfter=true asks the updater to relaunch after applying.
       autoUpdater.quitAndInstall(true, true)
-    } catch {
-      // Fallback: let autoInstallOnAppQuit hook apply the update on normal quit.
-      app.relaunch()
-      app.quit()
-    }
+    } catch {}
+
+    // quitAndInstall can silently return without throwing if its internal state
+    // is missing or the native helper fails. Detect that and force a quit.
+    setTimeout(() => {
+      if (!quitStarted) {
+        app.off('before-quit', onBeforeQuit)
+        // autoInstallOnAppQuit=true means electron-updater's before-quit hook
+        // will apply the downloaded update when app.quit() fires.
+        app.relaunch()
+        app.quit()
+      }
+    }, 800)
   })
 })
 
