@@ -18,6 +18,7 @@ declare global {
       openExternal: (url: string) => void
       onUpdateAvailable: (cb: (info: { version: string; body: string }) => void) => void
       onUpdateDownloaded: (cb: () => void) => void
+      onUpdateError: (cb: (message: string) => void) => void
       onDownloadProgress: (cb: (data: { percent: number; downloaded: number; total: number }) => void) => void
       removeDownloadProgressListener: () => void
       onOpenFile: (cb: (filePath: string) => void) => void

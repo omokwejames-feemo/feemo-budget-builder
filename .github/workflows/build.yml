@@ -100,10 +100,9 @@ jobs:
           body: |
             ## What's new in v${{ steps.version.outputs.version }}
 
-            - Fix: in-app update now restarts and applies correctly without re-installing
-            - Fix: update changelog now displays cleanly without markdown symbols
-            - Improved app icon with proper macOS squircle shape
-            - Feemovision logo replaces F placeholder throughout the app
+            - Fix: restart button now shows Restarting state and applies update reliably
+            - Fix: update errors are now surfaced in the UI instead of failing silently
+            - Fix: 3-second fallback forces proper quit if quitAndInstall stalls
 
             ---
             Mac: download the .dmg — open it and drag to Applications for first install.

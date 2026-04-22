@@ -10,6 +10,7 @@ type DlState =
   | { status: 'idle' }
   | { status: 'downloading'; percent: number; downloaded: number; total: number }
   | { status: 'ready' }
+  | { status: 'restarting' }
   | { status: 'error'; message: string }
 
 function fmtBytes(b: number) {
@@ -49,9 +50,8 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
   const changelogLines = renderChangelog(update.body)
 
   useEffect(() => {
-    window.electronAPI?.onUpdateDownloaded(() => {
-      setDlState({ status: 'ready' })
-    })
+    window.electronAPI?.onUpdateDownloaded(() => setDlState({ status: 'ready' }))
+    window.electronAPI?.onUpdateError(msg => setDlState({ status: 'error', message: msg }))
   }, [])
 
   async function handleDownload() {
@@ -65,14 +65,14 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
     if (!result.success) {
       setDlState({ status: 'error', message: result.error ?? 'Download failed.' })
     }
-    // ready state is set by the onUpdateDownloaded event
   }
 
   function handleRestart() {
+    setDlState({ status: 'restarting' })
     window.electronAPI?.installUpdate()
   }
 
-  const busy = dlState.status === 'downloading'
+  const busy = dlState.status === 'downloading' || dlState.status === 'restarting'
 
   return (
     <div style={{
@@ -150,11 +150,15 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
         )}
 
         {/* Ready to restart */}
-        {dlState.status === 'ready' && (
+        {(dlState.status === 'ready' || dlState.status === 'restarting') && (
           <div style={{ padding: '16px 28px', borderBottom: '1px solid var(--border)', background: 'rgba(46,204,113,0.06)' }}>
-            <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: 13, marginBottom: 6 }}>✓ Update downloaded</div>
+            <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: 13, marginBottom: 6 }}>
+              {dlState.status === 'restarting' ? '⟳ Restarting…' : '✓ Update downloaded'}
+            </div>
             <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
-              Restart the app to apply the update. Your work will be saved automatically.
+              {dlState.status === 'restarting'
+                ? 'The app is closing and applying the update. It will reopen automatically.'
+                : 'Restart the app to apply the update. Your work will be saved automatically.'}
             </div>
           </div>
         )}
@@ -177,6 +181,11 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
           {dlState.status === 'ready' && (
             <button className="btn btn-primary" style={{ fontSize: 13, padding: '9px 22px', background: 'var(--green)', borderColor: 'var(--green)' }} onClick={handleRestart}>
               ↺ Restart &amp; Apply
+            </button>
+          )}
+          {dlState.status === 'restarting' && (
+            <button className="btn btn-primary" disabled style={{ fontSize: 13, padding: '9px 22px', opacity: 0.6 }}>
+              ⟳ Restarting…
             </button>
           )}
           {dlState.status === 'error' && (

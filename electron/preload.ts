@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('update-downloaded')
     ipcRenderer.on('update-downloaded', () => cb())
   },
+  onUpdateError: (cb: (message: string) => void) => {
+    ipcRenderer.removeAllListeners('update-error')
+    ipcRenderer.on('update-error', (_event, message) => cb(message))
+  },
   onDownloadProgress: (cb: (data: { percent: number; downloaded: number; total: number }) => void) => {
     ipcRenderer.removeAllListeners('download-progress')
     ipcRenderer.on('download-progress', (_event, data) => cb(data))

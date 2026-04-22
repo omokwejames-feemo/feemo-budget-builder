@@ -30,6 +30,10 @@ autoUpdater.on('download-progress', (progress) => {
 autoUpdater.on('update-downloaded', () => {
   mainWindow?.webContents.send('update-downloaded')
 })
+
+autoUpdater.on('error', (err) => {
+  mainWindow?.webContents.send('update-error', err.message)
+})
 const DRIVE_TOKEN_PATH = join(app.getPath('userData'), 'gdrive-token.json')
 const DRIVE_CREDS_PATH = join(app.getPath('userData'), 'gdrive-creds.json')
 
@@ -188,15 +192,16 @@ ipcMain.handle('download-update', async () => {
 })
 
 ipcMain.handle('install-update', () => {
-  // setImmediate lets the IPC response return before the app quits,
-  // otherwise the invoke() in the renderer hangs and blocks the quit.
   setImmediate(() => {
     try {
       autoUpdater.quitAndInstall(false, true)
-    } catch {
+    } catch {}
+    // Safety net: if quitAndInstall didn't close the app within 3s,
+    // force a proper quit so autoInstallOnAppQuit can apply the update.
+    setTimeout(() => {
       app.relaunch()
-      app.exit(0)
-    }
+      app.quit()
+    }, 3000)
   })
 })
 
