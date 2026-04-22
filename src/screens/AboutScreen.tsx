@@ -71,12 +71,11 @@ export default function AboutScreen() {
       {/* Identity */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ padding: '28px', display: 'flex', alignItems: 'center', gap: 24 }}>
-          <div style={{
-            width: 64, height: 64, background: 'var(--accent)', color: '#000',
-            fontWeight: 800, fontSize: 36, borderRadius: 14, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 20px rgba(245,166,35,0.25)',
-          }}>F</div>
+          <img
+            src="/feemo-logo.png"
+            alt="Feemovision"
+            style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 14, flexShrink: 0 }}
+          />
           <div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Feemo Budget Manager</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

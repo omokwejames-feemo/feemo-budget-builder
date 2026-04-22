@@ -79,11 +79,11 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
           borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'flex-start', gap: 16,
         }}>
-          <div style={{
-            width: 44, height: 44, background: 'var(--accent)', color: '#000',
-            fontWeight: 800, fontSize: 24, borderRadius: 10, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>F</div>
+          <img
+            src="/feemo-logo.png"
+            alt="Feemovision"
+            style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }}
+          />
           <div>
             <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
               Update available — v{update.version}
