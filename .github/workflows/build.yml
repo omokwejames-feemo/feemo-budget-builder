@@ -100,8 +100,7 @@ jobs:
           body: |
             ## What's new in v${{ steps.version.outputs.version }}
 
-            - Fix: download now retries automatically if the network connection drops mid-redirect
-            - Fix: Restart and Apply now reliably closes and relaunches the app with the update applied
+            - Fix: Restart and Apply now works — bypasses Squirrel.Mac with a shell-script updater that extracts and applies the update after the app exits
 
             ---
             Mac: download the .dmg — open it and drag to Applications for first install.
