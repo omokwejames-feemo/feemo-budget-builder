@@ -42,8 +42,7 @@
       "provider": "github",
       "owner": "omokwejames-feemo",
       "repo": "feemo-budget-builder",
-      "draft": false,
-      "prerelease": false
+      "releaseType": "release"
     },
     "directories": {
       "output": "release",
