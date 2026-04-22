@@ -1,13 +1,35 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { join } from 'path'
-import { writeFile, readFile, createWriteStream } from 'fs'
 import { writeFile as writeFileAsync, readFile as readFileAsync, unlink } from 'fs/promises'
-import { get as httpsGet } from 'https'
-import { tmpdir, homedir } from 'os'
 import { createServer } from 'http'
 import { google } from 'googleapis'
 
-const GITHUB_REPO = 'omokwejames-feemo/feemo-budget-builder'
+// ── Auto-updater setup ────────────────────────────────────────────────────────
+
+autoUpdater.autoDownload = false
+autoUpdater.autoInstallOnAppQuit = true
+
+autoUpdater.on('update-available', (info) => {
+  const body = typeof info.releaseNotes === 'string'
+    ? info.releaseNotes
+    : Array.isArray(info.releaseNotes)
+      ? info.releaseNotes.map((n: { note?: string }) => n.note ?? '').join('\n')
+      : ''
+  mainWindow?.webContents.send('update-available', { version: info.version, body })
+})
+
+autoUpdater.on('download-progress', (progress) => {
+  mainWindow?.webContents.send('download-progress', {
+    percent: Math.round(progress.percent),
+    downloaded: progress.transferred,
+    total: progress.total,
+  })
+})
+
+autoUpdater.on('update-downloaded', () => {
+  mainWindow?.webContents.send('update-downloaded')
+})
 const DRIVE_TOKEN_PATH = join(app.getPath('userData'), 'gdrive-token.json')
 const DRIVE_CREDS_PATH = join(app.getPath('userData'), 'gdrive-creds.json')
 
@@ -34,8 +56,6 @@ function getArgvFilePath(): string | null {
   return feemoArg ?? null
 }
 
-// ── Version helpers ───────────────────────────────────────────────────────────
-
 function compareVersions(a: string, b: string): number {
   const pa = a.replace(/^v/, '').split('.').map(Number)
   const pb = b.replace(/^v/, '').split('.').map(Number)
@@ -44,53 +64,6 @@ function compareVersions(a: string, b: string): number {
     if (diff !== 0) return diff
   }
   return 0
-}
-
-function fetchJson(url: string): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const req = httpsGet(url, { headers: { 'User-Agent': 'Feemo-Budget-Builder' } }, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        res.resume()
-        fetchJson(res.headers.location!).then(resolve).catch(reject)
-        return
-      }
-      let body = ''
-      res.on('data', (chunk: Buffer) => { body += chunk.toString() })
-      res.on('end', () => {
-        try { resolve(JSON.parse(body)) } catch (e) { reject(e) }
-      })
-    })
-    req.on('error', reject)
-    req.setTimeout(10000, () => { req.destroy(); reject(new Error('Request timed out')) })
-  })
-}
-
-// Download a binary file with redirect following and progress events
-function downloadFile(url: string, destPath: string, onProgress: (pct: number, dl: number, total: number) => void): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const file = createWriteStream(destPath)
-
-    const doGet = (currentUrl: string) => {
-      httpsGet(currentUrl, { headers: { 'User-Agent': 'Feemo-Budget-Builder' } }, (res) => {
-        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-          res.resume()
-          doGet(res.headers.location)
-          return
-        }
-        const total = parseInt(res.headers['content-length'] ?? '0', 10)
-        let downloaded = 0
-        res.on('data', (chunk: Buffer) => {
-          downloaded += chunk.length
-          onProgress(total > 0 ? Math.round((downloaded / total) * 100) : 0, downloaded, total)
-        })
-        res.pipe(file)
-        file.on('finish', () => resolve())
-        res.on('error', (err) => { file.destroy(); reject(err) })
-      }).on('error', (err) => { file.destroy(); reject(err) })
-    }
-
-    doGet(url)
-  })
 }
 
 // ── Window ────────────────────────────────────────────────────────────────────
@@ -186,64 +159,36 @@ ipcMain.handle('get-app-version', () => app.getVersion())
 
 ipcMain.handle('check-for-updates', async () => {
   const current = app.getVersion()
-  const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
-
+  if (!app.isPackaged) {
+    return { success: true, current, latest: current, hasUpdate: false, body: '' }
+  }
   try {
-    const json = await fetchJson(apiUrl) as Record<string, unknown>
-    const latest = (json.tag_name as string)?.replace(/^v/, '') ?? current
-    const releasePageUrl = (json.html_url as string) ?? `https://github.com/${GITHUB_REPO}/releases/latest`
+    const result = await autoUpdater.checkForUpdates()
+    if (!result) return { success: true, current, latest: current, hasUpdate: false, body: '' }
+    const latest = result.updateInfo.version
     const hasUpdate = compareVersions(latest, current) > 0
-
-    // Pick the right installer asset for this platform / arch
-    type Asset = { name: string; browser_download_url: string; size: number }
-    const assets = (json.assets as Asset[]) ?? []
-    const isMac = process.platform === 'darwin'
-    const isArm = process.arch === 'arm64'
-
-    let assetUrl = releasePageUrl
-    let assetSize = 0
-
-    if (isMac) {
-      const armDmg = assets.find(a => a.name.toLowerCase().includes('arm64') && a.name.endsWith('.dmg'))
-      const x64Dmg = assets.find(a => !a.name.toLowerCase().includes('arm64') && a.name.endsWith('.dmg'))
-      const chosen = isArm ? (armDmg ?? x64Dmg) : (x64Dmg ?? armDmg)
-      if (chosen) { assetUrl = chosen.browser_download_url; assetSize = chosen.size }
-    } else {
-      const exe = assets.find(a => a.name.endsWith('.exe'))
-      if (exe) { assetUrl = exe.browser_download_url; assetSize = exe.size }
-    }
-
-    const body = (json.body as string) ?? ''
-    return { success: true, current, latest, hasUpdate, releasePageUrl, assetUrl, assetSize, body }
+    const body = typeof result.updateInfo.releaseNotes === 'string'
+      ? result.updateInfo.releaseNotes
+      : Array.isArray(result.updateInfo.releaseNotes)
+        ? result.updateInfo.releaseNotes.map((n: { note?: string }) => n.note ?? '').join('\n')
+        : ''
+    return { success: true, current, latest, hasUpdate, body }
   } catch (err) {
-    return {
-      success: false, error: String(err), current, latest: current,
-      hasUpdate: false, releasePageUrl: `https://github.com/${GITHUB_REPO}/releases/latest`,
-      assetUrl: '', assetSize: 0, body: '',
-    }
+    return { success: false, error: String(err), current, latest: current, hasUpdate: false, body: '' }
   }
 })
 
-ipcMain.handle('download-and-open-update', async (_event, { assetUrl, fileName }: { assetUrl: string; fileName: string }) => {
-  // Save to ~/Downloads so it's obvious and accessible to the user
-  const destDir = process.platform === 'darwin'
-    ? join(homedir(), 'Downloads')
-    : tmpdir()
-  const destPath = join(destDir, fileName)
-
+ipcMain.handle('download-update', async () => {
   try {
-    await downloadFile(assetUrl, destPath, (pct, dl, total) => {
-      mainWindow?.webContents.send('download-progress', { percent: pct, downloaded: dl, total })
-    })
-
-    // Hand off to the OS — macOS opens the DMG in Finder, Windows runs the NSIS exe
-    const errMsg = await shell.openPath(destPath)
-    if (errMsg) return { success: false, error: errMsg }
-
-    return { success: true, path: destPath }
+    await autoUpdater.downloadUpdate()
+    return { success: true }
   } catch (err) {
     return { success: false, error: String(err) }
   }
+})
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall()
 })
 
 ipcMain.handle('open-external', (_event, url: string) => {

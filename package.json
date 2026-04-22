@@ -1,6 +1,6 @@
 {
   "name": "feemo-budget-manager",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Feemo Budget Manager — Smart Production Budget Generator",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -14,6 +14,7 @@
   "author": "Feemovision",
   "license": "MIT",
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "exceljs": "^4.4.0",
     "googleapis": "^171.4.0",
     "react": "^18.3.1",
@@ -37,7 +38,11 @@
     "appId": "com.feemovision.budget-manager",
     "productName": "Feemo Budget Manager",
     "asar": true,
-    "publish": null,
+    "publish": {
+      "provider": "github",
+      "owner": "omokwejames-feemo",
+      "repo": "feemo-budget-builder"
+    },
     "directories": {
       "output": "release",
       "buildResources": "public"

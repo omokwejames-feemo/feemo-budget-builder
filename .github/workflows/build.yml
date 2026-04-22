@@ -23,17 +23,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build
+      - name: Build & Publish
         run: npm run build
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          ELECTRON_BUILDER_PUBLISH: never
-
-      - name: Upload dmg artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-dmg
-          path: release/*.dmg
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-windows:
     name: Windows (.exe)
@@ -49,52 +43,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build
+      - name: Build & Publish
         run: npm run build
         env:
-          ELECTRON_BUILDER_PUBLISH: never
-
-      - name: Upload exe artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: win-exe
-          path: release/*.exe
-
-  release:
-    name: Publish Release
-    needs: [build-mac, build-windows]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get version from package.json
-        id: version
-        run: echo "version=$(jq -r '.version' package.json)" >> $GITHUB_OUTPUT
-
-      - name: Download Mac artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: mac-dmg
-          path: ./artifacts
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: win-exe
-          path: ./artifacts
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Feemo Budget Manager v${{ steps.version.outputs.version }}
-          files: ./artifacts/*
-          make_latest: true
-          allowUpdates: true
-          body: |
-            ## Feemo Budget Manager v${{ steps.version.outputs.version }}
-
-            Download the installer for your platform:
-
-            - **Mac** → download the `.dmg` file, open it, drag the app to Applications
-            - **Windows** → download the `.exe` file and run the installer
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

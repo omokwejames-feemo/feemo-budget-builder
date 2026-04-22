@@ -1,19 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface PendingUpdate {
   version: string
   current: string
   body: string
-  assetUrl: string
-  assetSize: number
-  releasePageUrl: string
 }
 
 type DlState =
   | { status: 'idle' }
   | { status: 'downloading'; percent: number; downloaded: number; total: number }
-  | { status: 'opening' }
-  | { status: 'done' }
+  | { status: 'ready' }
   | { status: 'error'; message: string }
 
 function fmtBytes(b: number) {
@@ -21,8 +17,6 @@ function fmtBytes(b: number) {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// Render the GitHub release body as a simple readable list.
-// We strip markdown headers/bullets and just show plain lines.
 function renderChangelog(body: string): string[] {
   if (!body.trim()) return []
   return body
@@ -38,31 +32,33 @@ interface UpdateDialogProps {
 
 export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
   const [dlState, setDlState] = useState<DlState>({ status: 'idle' })
-  const isMac = navigator.platform.toUpperCase().includes('MAC')
   const changelogLines = renderChangelog(update.body)
+
+  useEffect(() => {
+    window.electronAPI?.onUpdateDownloaded(() => {
+      setDlState({ status: 'ready' })
+    })
+  }, [])
 
   async function handleDownload() {
     if (!window.electronAPI) return
-    const rawName = update.assetUrl.split('/').pop() ?? `Feemo-Budget-Builder-${update.version}${isMac ? '.dmg' : '.exe'}`
-    const fileName = decodeURIComponent(rawName)
-
     setDlState({ status: 'downloading', percent: 0, downloaded: 0, total: 0 })
-
     window.electronAPI.onDownloadProgress(({ percent, downloaded, total }) => {
       setDlState({ status: 'downloading', percent, downloaded, total })
     })
-
-    const result = await window.electronAPI.downloadAndOpenUpdate(update.assetUrl, fileName)
+    const result = await window.electronAPI.downloadUpdate()
     window.electronAPI.removeDownloadProgressListener()
-
     if (!result.success) {
       setDlState({ status: 'error', message: result.error ?? 'Download failed.' })
-    } else {
-      setDlState({ status: 'done' })
     }
+    // ready state is set by the onUpdateDownloaded event
   }
 
-  const busy = dlState.status === 'downloading' || dlState.status === 'opening'
+  function handleRestart() {
+    window.electronAPI?.installUpdate()
+  }
+
+  const busy = dlState.status === 'downloading'
 
   return (
     <div style={{
@@ -93,7 +89,7 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
               Update available — v{update.version}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-              You're on v{update.current}. A new version is ready to download.
+              {update.current ? `You're on v${update.current}. ` : ''}A new version is ready to install.
             </div>
           </div>
         </div>
@@ -119,19 +115,19 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
         )}
 
         {/* Download progress */}
-        {(dlState.status === 'downloading' || dlState.status === 'opening') && (
+        {dlState.status === 'downloading' && (
           <div style={{ padding: '16px 28px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ fontSize: 12, color: 'var(--blue)', fontWeight: 600, marginBottom: 8 }}>
-              {dlState.status === 'opening' ? 'Opening installer…' : `Downloading… ${dlState.percent}%`}
+              Downloading… {dlState.percent}%
             </div>
             <div style={{ height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
               <div style={{
                 height: '100%', borderRadius: 3, background: 'var(--blue)',
-                width: `${dlState.status === 'downloading' ? dlState.percent : 100}%`,
+                width: `${dlState.percent}%`,
                 transition: 'width 0.3s ease',
               }} />
             </div>
-            {dlState.status === 'downloading' && dlState.total > 0 && (
+            {dlState.total > 0 && (
               <div style={{ fontSize: 11, color: 'var(--text3)' }}>
                 {fmtBytes(dlState.downloaded)} / {fmtBytes(dlState.total)}
               </div>
@@ -139,14 +135,12 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
           </div>
         )}
 
-        {/* Done */}
-        {dlState.status === 'done' && (
+        {/* Ready to restart */}
+        {dlState.status === 'ready' && (
           <div style={{ padding: '16px 28px', borderBottom: '1px solid var(--border)', background: 'rgba(46,204,113,0.06)' }}>
-            <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: 13, marginBottom: 6 }}>✓ Installer opened</div>
+            <div style={{ fontWeight: 700, color: 'var(--green)', fontSize: 13, marginBottom: 6 }}>✓ Update downloaded</div>
             <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
-              {isMac
-                ? 'Drag Feemo Budget Builder into your Applications folder, then relaunch.'
-                : 'Follow the installer prompts to complete the update.'}
+              Restart the app to apply the update. Your work will be saved automatically.
             </div>
           </div>
         )}
@@ -155,13 +149,7 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
         {dlState.status === 'error' && (
           <div style={{ padding: '14px 28px', borderBottom: '1px solid var(--border)', background: 'rgba(231,76,60,0.06)' }}>
             <div style={{ fontWeight: 600, color: 'var(--red)', fontSize: 12, marginBottom: 4 }}>Download failed</div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>{dlState.message}</div>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => window.electronAPI?.openExternal(update.releasePageUrl)}
-            >
-              Open release page instead →
-            </button>
+            <div style={{ fontSize: 11, color: 'var(--text3)' }}>{dlState.message}</div>
           </div>
         )}
 
@@ -169,25 +157,29 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
         <div style={{ padding: '16px 28px', display: 'flex', gap: 10, alignItems: 'center' }}>
           {dlState.status === 'idle' && (
             <button className="btn btn-primary" style={{ fontSize: 13, padding: '9px 22px' }} onClick={handleDownload}>
-              ↓ Download &amp; Install v{update.version}
+              ↓ Download Update
             </button>
           )}
-          {(dlState.status === 'error') && (
+          {dlState.status === 'ready' && (
+            <button className="btn btn-primary" style={{ fontSize: 13, padding: '9px 22px', background: 'var(--green)', borderColor: 'var(--green)' }} onClick={handleRestart}>
+              ↺ Restart &amp; Apply
+            </button>
+          )}
+          {dlState.status === 'error' && (
             <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setDlState({ status: 'idle' })}>
               Try again
             </button>
           )}
-          {update.assetSize > 0 && dlState.status === 'idle' && (
-            <span style={{ fontSize: 11, color: 'var(--text3)' }}>{fmtBytes(update.assetSize)}</span>
-          )}
           <div style={{ flex: 1 }} />
-          {!busy && dlState.status !== 'done' && (
+          {!busy && dlState.status !== 'ready' && (
             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text3)' }} onClick={onDismiss}>
               Later
             </button>
           )}
-          {dlState.status === 'done' && (
-            <button className="btn btn-ghost btn-sm" onClick={onDismiss}>Close</button>
+          {dlState.status === 'ready' && (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text3)' }} onClick={onDismiss}>
+              Later
+            </button>
           )}
         </div>
       </div>

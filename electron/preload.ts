@@ -18,12 +18,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-app-version'),
   checkForUpdates: () =>
     ipcRenderer.invoke('check-for-updates'),
-  downloadAndOpenUpdate: (assetUrl: string, fileName: string) =>
-    ipcRenderer.invoke('download-and-open-update', { assetUrl, fileName }),
+  downloadUpdate: () =>
+    ipcRenderer.invoke('download-update'),
+  installUpdate: () =>
+    ipcRenderer.invoke('install-update'),
   openExternal: (url: string) =>
     ipcRenderer.invoke('open-external', url),
 
-  // Progress events — renderer subscribes once per download session
+  onUpdateAvailable: (cb: (info: { version: string; body: string }) => void) => {
+    ipcRenderer.removeAllListeners('update-available')
+    ipcRenderer.on('update-available', (_event, info) => cb(info))
+  },
+  onUpdateDownloaded: (cb: () => void) => {
+    ipcRenderer.removeAllListeners('update-downloaded')
+    ipcRenderer.on('update-downloaded', () => cb())
+  },
   onDownloadProgress: (cb: (data: { percent: number; downloaded: number; total: number }) => void) => {
     ipcRenderer.removeAllListeners('download-progress')
     ipcRenderer.on('download-progress', (_event, data) => cb(data))

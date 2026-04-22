@@ -36,9 +36,6 @@ interface PendingUpdate {
   version: string
   current: string
   body: string
-  assetUrl: string
-  assetSize: number
-  releasePageUrl: string
 }
 
 export default function App() {
@@ -86,17 +83,15 @@ export default function App() {
     window.electronAPI?.checkForUpdates()
       .then(r => {
         if (r.success && r.hasUpdate) {
-          setPendingUpdate({
-            version: r.latest,
-            current: r.current,
-            body: r.body ?? '',
-            assetUrl: r.assetUrl,
-            assetSize: r.assetSize,
-            releasePageUrl: r.releasePageUrl,
-          })
+          setPendingUpdate({ version: r.latest, current: r.current, body: r.body ?? '' })
         }
       })
       .catch(() => {})
+
+    // Also listen for updates pushed from main process mid-session
+    window.electronAPI?.onUpdateAvailable(info => {
+      setPendingUpdate({ version: info.version, current: '', body: info.body })
+    })
   }, [])
 
   // Track unsaved changes whenever store state mutates

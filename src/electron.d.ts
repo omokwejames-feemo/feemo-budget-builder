@@ -1,6 +1,4 @@
 // Global type augmentation for Electron's preload bridge
-// This file is a module (export {}) so declare global {} is valid
-
 export {}
 
 declare global {
@@ -13,11 +11,13 @@ declare global {
       readFileByPath: (filePath: string) => Promise<{ success: boolean; filePath?: string; data?: string; error?: string }>
       getAppVersion: () => Promise<string>
       checkForUpdates: () => Promise<{
-        success: boolean; error?: string; hasUpdate: boolean; latest: string; current: string
-        body?: string; assetUrl: string; assetSize: number; releasePageUrl: string
+        success: boolean; error?: string; hasUpdate: boolean; latest: string; current: string; body?: string
       }>
-      downloadAndOpenUpdate: (assetUrl: string, fileName: string) => Promise<{ success: boolean; path?: string; error?: string }>
+      downloadUpdate: () => Promise<{ success: boolean; error?: string }>
+      installUpdate: () => void
       openExternal: (url: string) => void
+      onUpdateAvailable: (cb: (info: { version: string; body: string }) => void) => void
+      onUpdateDownloaded: (cb: () => void) => void
       onDownloadProgress: (cb: (data: { percent: number; downloaded: number; total: number }) => void) => void
       removeDownloadProgressListener: () => void
       onOpenFile: (cb: (filePath: string) => void) => void
