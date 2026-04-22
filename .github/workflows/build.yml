@@ -23,12 +23,19 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build & Publish
+      - name: Build
         run: npm run build
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_BUILDER_PUBLISH: always
+          ELECTRON_BUILDER_PUBLISH: never
+
+      - name: Upload mac artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-artifacts
+          path: |
+            release/*.dmg
+            release/latest-mac.yml
 
   build-windows:
     name: Windows (.exe)
@@ -44,8 +51,53 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build & Publish
+      - name: Build
         run: npm run build
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ELECTRON_BUILDER_PUBLISH: always
+          ELECTRON_BUILDER_PUBLISH: never
+
+      - name: Upload windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-artifacts
+          path: |
+            release/*.exe
+            release/latest.yml
+
+  release:
+    name: Publish Release
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from package.json
+        id: version
+        run: echo "version=$(jq -r '.version' package.json)" >> $GITHUB_OUTPUT
+
+      - name: Download Mac artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-artifacts
+          path: ./artifacts
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: win-artifacts
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Feemo Budget Manager v${{ steps.version.outputs.version }}
+          files: ./artifacts/*
+          make_latest: true
+          body: |
+            ## Feemo Budget Manager v${{ steps.version.outputs.version }}
+
+            Download the installer for your platform:
+
+            - **Mac** → download the `.dmg` file, open it, drag the app to Applications
+            - **Windows** → download the `.exe` file and run the installer
