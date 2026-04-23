@@ -41,6 +41,8 @@ interface PendingUpdate {
 
 export default function App() {
   const [accessGranted, setAccessGranted] = useState(false)
+  const [accessExpiresAt, setAccessExpiresAt] = useState<number | null>(null)
+  const [showExpiryNotice, setShowExpiryNotice] = useState(false)
   const [appView, setAppView] = useState<'home' | 'app' | 'rebuild' | 'upload'>('home')
   const [screen, setScreen] = useState<Screen>('assumptions')
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
@@ -230,7 +232,58 @@ export default function App() {
   const updateAvailable = pendingUpdate !== null
 
   if (!accessGranted) {
-    return <BetaGate onGranted={() => setAccessGranted(true)} />
+    return (
+      <BetaGate onGranted={(expiresAt) => {
+        setAccessGranted(true)
+        if (expiresAt !== null) {
+          setAccessExpiresAt(expiresAt)
+          setShowExpiryNotice(true)
+        }
+      }} />
+    )
+  }
+
+  // ── Access expiry notice (shown once per launch after gate passes) ──────────
+  if (showExpiryNotice && accessExpiresAt !== null) {
+    const msLeft = accessExpiresAt - Date.now()
+    const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)))
+    const expiryDate = new Date(accessExpiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    const urgent = daysLeft <= 1
+    const warning = daysLeft <= 2
+
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#141414', border: `1px solid ${urgent ? '#cc2233' : warning ? '#f5a623' : '#2a2a2a'}`, borderRadius: 16, padding: '44px 48px', maxWidth: 440, width: '90%', textAlign: 'center', boxShadow: '0 24px 80px rgba(0,0,0,0.8)' }}>
+          <div style={{ fontSize: 40, marginBottom: 20 }}>{urgent ? '⚠️' : '🔑'}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 6 }}>Beta Access</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#f5a623', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 24 }}>Feemo Budget Manager</div>
+
+          {daysLeft === 0 ? (
+            <p style={{ fontSize: 15, color: '#cc2233', fontWeight: 700, lineHeight: 1.6, marginBottom: 8 }}>
+              Your beta access expires <strong>today</strong>.
+            </p>
+          ) : (
+            <p style={{ fontSize: 15, color: urgent ? '#cc2233' : warning ? '#f5a623' : '#ccc', fontWeight: 600, lineHeight: 1.6, marginBottom: 8 }}>
+              You have <strong style={{ fontSize: 28, display: 'block', margin: '8px 0', color: urgent ? '#cc2233' : warning ? '#f5a623' : '#fff' }}>
+                {daysLeft} {daysLeft === 1 ? 'day' : 'days'}
+              </strong> remaining on your beta access key.
+            </p>
+          )}
+
+          <p style={{ fontSize: 12, color: '#555', marginBottom: 28 }}>
+            Access expires on <strong style={{ color: '#777' }}>{expiryDate}</strong>.
+            {(urgent || warning) && <><br />Contact <a href="mailto:james@feemovision.com" style={{ color: '#f5a623', textDecoration: 'none' }}>james@feemovision.com</a> to extend your access.</>}
+          </p>
+
+          <button
+            onClick={() => setShowExpiryNotice(false)}
+            style={{ width: '100%', padding: '13px 0', background: '#f5a623', color: '#000', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}
+          >
+            OK, got it
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (appView === 'rebuild') {

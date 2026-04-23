@@ -121,8 +121,10 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedBudg
   for (const ws of wb.worksheets) {
     ws.eachRow((row, rowNum) => {
       const cells = row.values as ExcelJS.CellValue[]
-      // cells[0] is undefined (1-based), so we iterate from 1
-      const texts = cells.slice(1).map(c => {
+      // row.values is 1-indexed and sparse — use Array.from so no holes remain
+      const len = Math.max(0, cells.length - 1)
+      const texts = Array.from({ length: len }, (_, idx) => {
+        const c = cells[idx + 1]
         if (c === null || c === undefined) return ''
         if (typeof c === 'object' && 'richText' in (c as object)) {
           return (c as ExcelJS.CellRichTextValue).richText.map(r => r.text).join('')
@@ -132,7 +134,8 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedBudg
         }
         return String(c)
       })
-      const nums = cells.slice(1).map(c => {
+      const nums = Array.from({ length: len }, (_, idx) => {
+        const c = cells[idx + 1]
         if (typeof c === 'number') return c
         if (typeof c === 'object' && c !== null && 'result' in (c as object)) {
           const r = (c as ExcelJS.CellFormulaValue).result
@@ -142,7 +145,7 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedBudg
       })
 
       for (let i = 0; i < texts.length; i++) {
-        const t = texts[i]
+        const t = texts[i] ?? ''
         const tl = lc(t)
         const firstNum = nums.find(n => n !== null) ?? null
         const adjacentNum = nums[i + 1] ?? nums[i] ?? null

@@ -5,7 +5,7 @@ import { loadSession, saveSession, clearSession } from '../utils/betaSession'
 type Stage = 'checking' | 'key-entry' | 'sending-code' | 'code-entry'
 
 interface BetaGateProps {
-  onGranted: () => void
+  onGranted: (expiresAt: number | null) => void
 }
 
 // ─── Micro-components ─────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
       if (!window.electronAPI) { setStage('key-entry'); return }
       const res = await window.electronAPI.betaCheckSession(session.key, session.email)
       if (res.valid) {
-        onGranted()
+        onGranted(res.expiresAt ?? session.expiresAt ?? null)
       } else {
         await clearSession()
         setStage('key-entry')
@@ -94,7 +94,7 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
     if (!trimKey) { setError('Please enter your access key.'); return }
 
     // Local master-key check — no IPC, no network
-    if (await isMasterKey(trimKey)) { onGranted(); return }
+    if (await isMasterKey(trimKey)) { onGranted(null); return }
 
     if (!trimEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimEmail)) {
       setError('Please enter a valid email address.')
@@ -107,7 +107,7 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
 
     const res = await api.betaValidateKey(trimKey, trimEmail)
 
-    if (res.status === 'master-granted') { onGranted(); return }
+    if (res.status === 'master-granted') { onGranted(null); return }
 
     if (res.status === 'error') {
       setError(res.message ?? 'Access denied.')
@@ -115,8 +115,9 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
     }
 
     if (res.status === 'verified') {
-      await saveSession({ key: trimKey, email: trimEmail, expiresAt: res.expiresAt ?? Date.now() + 5 * 86400000 })
-      onGranted(); return
+      const exp = res.expiresAt ?? Date.now() + 5 * 86400000
+      await saveSession({ key: trimKey, email: trimEmail, expiresAt: exp })
+      onGranted(exp); return
     }
 
     // needs-verification — send OTP
@@ -144,8 +145,9 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
     setBusy(false)
 
     if (res.success) {
-      await saveSession({ key: pendingKey, email: pendingEmail, expiresAt: res.expiresAt ?? Date.now() + 5 * 86400000 })
-      onGranted()
+      const exp = res.expiresAt ?? Date.now() + 5 * 86400000
+      await saveSession({ key: pendingKey, email: pendingEmail, expiresAt: exp })
+      onGranted(exp)
     } else {
       setError(res.message ?? 'Verification failed.')
     }
