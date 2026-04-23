@@ -18,7 +18,7 @@ export default defineConfig({
             rollupOptions: {
               // Keep Node.js-only packages out of the vite bundle —
               // electron-builder includes them from node_modules at runtime
-              external: ['googleapis', 'electron-updater', 'electron', 'fs', 'path', 'os', 'https', 'http', 'stream', 'crypto'],
+              external: ['googleapis', 'electron-updater', 'electron', 'fs', 'path', 'os', 'https', 'http', 'stream', 'crypto', 'electron-store', 'conf', 'nodemailer', 'dotenv'],
             },
           },
         },

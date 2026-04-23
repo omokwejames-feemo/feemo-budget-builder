@@ -11,6 +11,7 @@ import AboutScreen from './screens/AboutScreen'
 import PaymentScheduleCreator from './screens/PaymentScheduleCreator'
 import ExpenditureTracker from './screens/ExpenditureTracker'
 import RebuildFromFiles from './screens/RebuildFromFiles'
+import BudgetUploadScreen from './screens/BudgetUploadScreen'
 import UpdateDialog from './components/UpdateDialog'
 import OpenProjectDialog from './components/OpenProjectDialog'
 import BetaGate from './components/BetaGate'
@@ -40,7 +41,7 @@ interface PendingUpdate {
 
 export default function App() {
   const [accessGranted, setAccessGranted] = useState(false)
-  const [appView, setAppView] = useState<'home' | 'app' | 'rebuild'>('home')
+  const [appView, setAppView] = useState<'home' | 'app' | 'rebuild' | 'upload'>('home')
   const [screen, setScreen] = useState<Screen>('assumptions')
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -242,10 +243,23 @@ export default function App() {
     )
   }
 
+  if (appView === 'upload') {
+    return (
+      <BudgetUploadScreen
+        onDone={() => {
+          setScreen('assumptions')
+          setAppView('app')
+          isFirstMount.current = true
+        }}
+        onCancel={() => setAppView('home')}
+      />
+    )
+  }
+
   if (appView === 'home') {
     return (
       <>
-        <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} recents={recents} onOpenRecent={doOpenRecent} onRebuild={() => setAppView('rebuild')} />
+        <HomeScreen onNewProject={handleNewProject} onOpenProject={handleOpenProject} onUploadBudget={() => setAppView('upload')} recents={recents} onOpenRecent={doOpenRecent} onRebuild={() => setAppView('rebuild')} />
         {showOpenDialog && (
           <OpenProjectDialog
             recents={recents}

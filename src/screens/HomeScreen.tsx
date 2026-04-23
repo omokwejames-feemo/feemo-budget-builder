@@ -13,12 +13,13 @@ function timeAgo(ts: number): string {
 interface HomeScreenProps {
   onNewProject: () => void
   onOpenProject: () => void
+  onUploadBudget: () => void
   recents: RecentProject[]
   onOpenRecent: (filePath: string) => void
   onRebuild: () => void
 }
 
-export default function HomeScreen({ onNewProject, onOpenProject, recents, onOpenRecent, onRebuild }: HomeScreenProps) {
+export default function HomeScreen({ onNewProject, onOpenProject, onUploadBudget, recents, onOpenRecent, onRebuild }: HomeScreenProps) {
   return (
     <div style={{
       height: '100vh',
@@ -90,6 +91,24 @@ export default function HomeScreen({ onNewProject, onOpenProject, recents, onOpe
             Open Project…
           </button>
         </div>
+
+        {/* Upload Existing Budget — distinct from New Project */}
+        <button
+          onClick={onUploadBudget}
+          style={{
+            padding: '12px 28px',
+            background: 'transparent', color: 'var(--text2)',
+            fontWeight: 600, fontSize: 14,
+            border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer',
+            transition: 'border-color 0.15s, color 0.15s',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text2)' }}
+        >
+          <span style={{ fontSize: 16 }}>📂</span> Upload Existing Budget
+        </button>
+
         <button
           onClick={onRebuild}
           style={{

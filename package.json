@@ -14,9 +14,14 @@
   "author": "Feemovision",
   "license": "MIT",
   "dependencies": {
+    "@types/nodemailer": "^8.0.0",
+    "dotenv": "^17.4.2",
+    "electron-store": "^8.2.0",
     "electron-updater": "^6.8.3",
     "exceljs": "^4.4.0",
+    "firebase": "^12.12.1",
     "googleapis": "^171.4.0",
+    "nodemailer": "^8.0.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.2"
@@ -66,11 +71,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -80,7 +91,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

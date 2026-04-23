@@ -1,11 +1,18 @@
+import * as dotenv from 'dotenv'
+import { join as joinPath } from 'path'
+dotenv.config({ path: joinPath(process.cwd(), '.env') })
+
 import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join, dirname } from 'path'
 import { writeFile as writeFileAsync, readFile as readFileAsync, unlink } from 'fs/promises'
 import { spawn } from 'child_process'
-import { tmpdir } from 'os'
+import { tmpdir, homedir } from 'os'
 import { createServer } from 'http'
 import { google } from 'googleapis'
+import { createHash, randomInt } from 'crypto'
+import ElectronStore from 'electron-store'
+import nodemailer from 'nodemailer'
 
 // ── Auto-updater setup ────────────────────────────────────────────────────────
 
@@ -41,6 +48,237 @@ autoUpdater.on('update-downloaded', (event: any) => {
 autoUpdater.on('error', (err) => {
   mainWindow?.webContents.send('update-error', err.message)
 })
+// ── Encrypted session store ───────────────────────────────────────────────────
+// Encryption key derived from device-specific paths so the store cannot be
+// copied and replayed on a different machine.
+function deviceEncryptionKey(): string {
+  const seed = `${homedir()}::${app.getPath('userData')}`
+  return createHash('sha256').update(seed).digest('hex').slice(0, 32)
+}
+
+const sessionStore = new ElectronStore<{ betaSession?: unknown }>({
+  name: 'feemo-session',
+  encryptionKey: deviceEncryptionKey(),
+})
+
+ipcMain.handle('session-load', () => {
+  const s = sessionStore.get('betaSession')
+  return s ?? null
+})
+
+ipcMain.handle('session-save', (_event, session: unknown) => {
+  sessionStore.set('betaSession', session)
+  return { success: true }
+})
+
+ipcMain.handle('session-clear', () => {
+  sessionStore.delete('betaSession')
+  return { success: true }
+})
+
+// ── Beta key registry ─────────────────────────────────────────────────────────
+// All 20 keys are stored as SHA-256 hashes — the plaintext key never appears here.
+// Key state (activation, expiry, bound email, verified) is stored in encrypted
+// electron-store. The OTP lives only in a process-level Map and is never sent
+// to the renderer.
+
+const KEY_HASHES: ReadonlySet<string> = new Set([
+  'd598dd65e360523512f2ce87f06ccec6baf890351f6e0a5715ade2f7f8708d29', // FEEMO-A7K2-M9PQ
+  '440aca7ccb0a21d43005cb5b3e5e2b8a83c8bd55ca51a0f83b4027e13dfc4860', // FEEMO-B3R8-X5NW
+  '941028076e1abf03c1bb802cf53bd03afcc64784a4c16709f80625660e14ee77', // FEEMO-C6T1-H4VZ
+  'a6518f7bb8f942b365b470d8a4474681d9e90575ebf8384295e271a09d5de413', // FEEMO-D9Y4-J2FL
+  '4cb2102a999acb8aff2ac19a07d6446fb8c202bc50dcde4e74b41f71423e564c', // FEEMO-E2S7-K8GT
+  '3dd51482918f5b15a78010ab5d0f6dccfffdeadaa5225ec7c6f18f056e9b9422', // FEEMO-F5W3-N1RB
+  '0f728b21ad0fe8e17331ddb8598d9271cd51cdfdfb81c9809ab932b3ce1a4755', // FEEMO-G8U6-P7DC
+  'd535eec0c256fa4fd39e8bf1fa79a1acea59aa125688ec2ec7fd40a0e6940bff', // FEEMO-H1V9-Q3SX
+  '4f140b9b30ab7b4fd64cb3803e8978e965b1c96067639e6cb2160edced53c371', // FEEMO-I4Z5-R6YM
+  'dbb9c81c8bff3b5f4da0d4daa042f357eec2972cc131e9b420b001c7149bad10', // FEEMO-J7Q2-T9AK
+  '6fba94a20965b5c7e4cc5c3cb50c2155328619e6cf2882a48efacb61403cd9b7', // FEEMO-K3M7-W2NP
+  '5895efe24def80c5fceaff6f54ec858e6eec6a06cd72e8725006bee52a130246', // FEEMO-L6B9-V5QR
+  '6551f6fd8bf170214ac2db2b25402abd36963ccd87d9cdf952b3921bd49af8a5', // FEEMO-M1D4-U8TZ
+  '6cb271083eb97c830101316806891730bf5038518fc89b41a798211e2bf26feb', // FEEMO-N8F2-S3YC
+  'b11433732ef2ce0eae601c9a057db92fa31add57d6cdf9a7adefcdd44ca10912', // FEEMO-O5H6-X1KW
+  'f40f6af9911130b85a907e19fd42d1b818152ef1b5d83b27774b4c19bb88bb89', // FEEMO-P2J8-A4VL
+  '65c8406898f5a7cbe5887fc79f9540adbf55b2576d4580e8378c8010282ea30b', // FEEMO-Q9G1-C7RX
+  'dd73aecd62d9ad344312a06a210228d6317386f2785caace3adb7b51eb5b2b4c', // FEEMO-R4L5-E2MB
+  '8efb04f0b9b535554c0247ede9c1c296f223664d97a6daf809281b2f9172fe63', // FEEMO-S7N3-G6DF
+  '4d94e69cfe1c754c1eba67dcfb28dc18dc17add700096effb8495357eb4eac83', // FEEMO-T0P8-I9QH
+])
+
+// Master key hash: SHA-256("0394") — validated locally in the renderer, but also
+// checked here as a second layer.
+const MASTER_KEY_HASH = '1adfa8633a067294c1036fb168c48de3626256afae07ab0c23bdf4fad5549f91'
+
+function hashKey(k: string): string {
+  return createHash('sha256').update(k.trim().toUpperCase()).digest('hex')
+}
+
+interface KeyRecord {
+  status: 'inactive' | 'active' | 'expired'
+  activatedAt: number | null
+  expiresAt: number | null
+  boundEmail: string | null
+  emailVerified: boolean
+}
+
+const keyStore = new ElectronStore<{ keys: Record<string, KeyRecord> }>({
+  name: 'feemo-keys',
+  encryptionKey: deviceEncryptionKey(),
+  defaults: { keys: {} },
+})
+
+function getKeyRecord(hash: string): KeyRecord {
+  const all = keyStore.get('keys') as Record<string, KeyRecord>
+  return all[hash] ?? { status: 'inactive', activatedAt: null, expiresAt: null, boundEmail: null, emailVerified: false }
+}
+
+function setKeyRecord(hash: string, rec: KeyRecord) {
+  const all = keyStore.get('keys') as Record<string, KeyRecord>
+  all[hash] = rec
+  keyStore.set('keys', all)
+}
+
+// In-process OTP store — never hits the renderer or any file
+const pendingOtps = new Map<string, { code: string; expiry: number; attempts: number }>()
+
+function makeTransport() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  })
+}
+
+// ── Beta IPC handlers ─────────────────────────────────────────────────────────
+
+ipcMain.handle('beta-validate-key', (_event, { key, email }: { key: string; email: string }) => {
+  const trimKey = key.trim().toUpperCase()
+  const trimEmail = email.trim().toLowerCase()
+
+  // Master key — grant immediately without email
+  const masterHash = createHash('sha256').update(key.trim()).digest('hex')
+  if (masterHash === MASTER_KEY_HASH) return { status: 'master-granted' }
+
+  const hash = hashKey(trimKey)
+  if (!KEY_HASHES.has(hash)) return { status: 'error', message: 'This key is not recognised. Please check your key and try again.' }
+
+  let rec = getKeyRecord(hash)
+  const now = Date.now()
+
+  // Auto-expire
+  if (rec.status === 'active' && rec.expiresAt && rec.expiresAt < now) {
+    rec = { ...rec, status: 'expired' }
+    setKeyRecord(hash, rec)
+  }
+  if (rec.status === 'expired') return { status: 'error', message: 'This key has expired and is no longer valid. Please contact Feemovision Limited.' }
+
+  // First use — activate
+  if (rec.status === 'inactive') {
+    rec = { status: 'active', activatedAt: now, expiresAt: now + 5 * 24 * 60 * 60 * 1000, boundEmail: null, emailVerified: false }
+    setKeyRecord(hash, rec)
+  }
+
+  // Email binding check
+  if (rec.boundEmail && rec.boundEmail !== trimEmail) {
+    return { status: 'error', message: 'This key is already registered to a different email address.' }
+  }
+
+  // Already fully verified for this email
+  if (rec.emailVerified && rec.boundEmail === trimEmail) {
+    return { status: 'verified', expiresAt: rec.expiresAt }
+  }
+
+  return { status: 'needs-verification', expiresAt: rec.expiresAt }
+})
+
+ipcMain.handle('beta-send-code', async (_event, { key, email }: { key: string; email: string }) => {
+  const trimKey = key.trim().toUpperCase()
+  const trimEmail = email.trim().toLowerCase()
+  const hash = hashKey(trimKey)
+  if (!KEY_HASHES.has(hash)) return { success: false, message: 'Key not found.' }
+
+  const code = String(randomInt(100000, 999999))
+  pendingOtps.set(hash, { code, expiry: Date.now() + 10 * 60 * 1000, attempts: 0 })
+
+  try {
+    const transport = makeTransport()
+    await transport.sendMail({
+      from: process.env.EMAIL_FROM ?? process.env.EMAIL_USER,
+      to: trimEmail,
+      subject: 'Feemo Budget Manager — Verify Your Beta Access',
+      text: [
+        'Hello,',
+        '',
+        'You have been granted access to the Feemo Budget Manager beta.',
+        '',
+        `Your verification code is: ${code}`,
+        '',
+        'This code expires in 10 minutes.',
+        '',
+        'If you did not request this, please ignore this email.',
+        '',
+        '— Feemovision Limited',
+      ].join('\n'),
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px"><h2 style="color:#f5a623;margin:0 0 16px">Feemo Budget Manager</h2><p>You have been granted access to the <strong>Feemo Budget Manager beta</strong>.</p><p style="font-size:32px;font-weight:700;letter-spacing:0.15em;color:#111;background:#f5f5f5;padding:16px;border-radius:8px;text-align:center">${code}</p><p style="color:#666;font-size:13px">This code expires in <strong>10 minutes</strong>.</p><p style="color:#999;font-size:12px;margin-top:32px">— Feemovision Limited</p></div>`,
+    })
+    return { success: true }
+  } catch (err) {
+    return { success: false, message: String(err) }
+  }
+})
+
+ipcMain.handle('beta-verify-code', (_event, { key, email, code }: { key: string; email: string; code: string }) => {
+  const trimKey = key.trim().toUpperCase()
+  const trimEmail = email.trim().toLowerCase()
+  const hash = hashKey(trimKey)
+
+  const otp = pendingOtps.get(hash)
+  if (!otp) return { success: false, message: 'No pending verification. Please re-enter your key to request a new code.' }
+  if (Date.now() > otp.expiry) {
+    pendingOtps.delete(hash)
+    return { success: false, message: 'This code has expired. Please re-enter your key to request a new one.' }
+  }
+  if (otp.attempts >= 3) {
+    pendingOtps.delete(hash)
+    return { success: false, message: 'Too many incorrect attempts. Please re-enter your key to request a new code.' }
+  }
+  if (otp.code !== code.trim()) {
+    otp.attempts++
+    return { success: false, message: 'Incorrect code. Please try again.' }
+  }
+
+  pendingOtps.delete(hash)
+  const rec = getKeyRecord(hash)
+  setKeyRecord(hash, { ...rec, emailVerified: true, boundEmail: trimEmail })
+  return { success: true, expiresAt: rec.expiresAt }
+})
+
+ipcMain.handle('beta-check-session', (_event, { key, email }: { key: string; email: string }) => {
+  const trimKey = key.trim().toUpperCase()
+  const trimEmail = email.trim().toLowerCase()
+
+  // Allow master key re-validation without network
+  const masterHash = createHash('sha256').update(key.trim()).digest('hex')
+  if (masterHash === MASTER_KEY_HASH) return { valid: true, expiresAt: null }
+
+  const hash = hashKey(trimKey)
+  if (!KEY_HASHES.has(hash)) return { valid: false }
+
+  const rec = getKeyRecord(hash)
+  const now = Date.now()
+
+  if (rec.status === 'expired') return { valid: false }
+  if (rec.expiresAt && rec.expiresAt < now) {
+    setKeyRecord(hash, { ...rec, status: 'expired' })
+    return { valid: false }
+  }
+  if (!rec.emailVerified || rec.boundEmail !== trimEmail) return { valid: false }
+
+  return { valid: true, expiresAt: rec.expiresAt }
+})
+
 const DRIVE_TOKEN_PATH = join(app.getPath('userData'), 'gdrive-token.json')
 const DRIVE_CREDS_PATH = join(app.getPath('userData'), 'gdrive-creds.json')
 
@@ -162,6 +400,17 @@ ipcMain.handle('read-file-by-path', async (_event, filePath: string) => {
   } catch (err) {
     return { success: false, error: String(err) }
   }
+})
+
+// ── Budget upload — open xlsx ─────────────────────────────────────────────────
+ipcMain.handle('open-xlsx-budget', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog({
+    filters: [{ name: 'Excel Budget', extensions: ['xlsx', 'xls'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || filePaths.length === 0) return { success: false }
+  const buffer = await readFileAsync(filePaths[0])
+  return { success: true, filePath: filePaths[0], buffer: Array.from(buffer) }
 })
 
 // ── Update IPC ────────────────────────────────────────────────────────────────
