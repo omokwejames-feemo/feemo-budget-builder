@@ -9,11 +9,39 @@ permissions:
   contents: write
 
 jobs:
+  bump-version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    # Skip if this commit was the version-bump itself (prevents infinite loop)
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Bump patch version and push
+        id: bump
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          npm version patch --no-git-tag-version
+          VERSION=$(jq -r '.version' package.json)
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to $VERSION [skip ci]"
+          git push
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
   build-mac:
     name: macOS (.dmg)
+    needs: bump-version
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -44,9 +72,12 @@ jobs:
 
   build-windows:
     name: Windows (.exe)
+    needs: bump-version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -75,14 +106,12 @@ jobs:
 
   release:
     name: Publish Release
-    needs: [build-mac, build-windows]
+    needs: [bump-version, build-mac, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Get version from package.json
-        id: version
-        run: echo "version=$(jq -r '.version' package.json)" >> $GITHUB_OUTPUT
+        with:
+          ref: main
 
       - name: Download Mac artifacts
         uses: actions/download-artifact@v4
@@ -99,26 +128,12 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Feemo Budget Manager v${{ steps.version.outputs.version }}
+          tag_name: v${{ needs.bump-version.outputs.version }}
+          name: Feemo Budget Manager v${{ needs.bump-version.outputs.version }}
           files: ./artifacts/*
           make_latest: true
           body: |
-            ## What's new in v${{ steps.version.outputs.version }}
+            ## Feemo Budget Manager v${{ needs.bump-version.outputs.version }}
 
-            **Beta Security System**
-            - Full key-based access gate — 20 unique FEEMO-XXXX-XXXX keys, each bound to a single email address
-            - Email verification via 6-digit one-time code on first use (expires in 10 minutes)
-            - Keys activate on first use with a 5-day access window
-            - Verified session stored locally — no re-entry required on subsequent launches
-            - Master key for internal use bypasses email verification entirely
-
-            **Upload Existing Budget**
-            - New "Upload Existing Budget" entry point on the home screen
-            - Reads any Excel budget and auto-detects: title, company, total budget, currency, shoot days, department allocations, timeline phases, VAT/WHT/contingency/production fee percentages
-            - Confirmation screen lets you review and correct every detected value before committing
-            - Missing data dialog lists all undetected fields with inline inputs and per-field Skip option
-
-            ---
-            **Mac:** download the `.dmg` — open it and drag to Applications.
+            **Mac:** download the `.dmg` — open it and drag Feemo Budget Manager to Applications.
             **Windows:** download the `.exe` and run the installer.
