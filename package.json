@@ -18,13 +18,11 @@
     "electron-updater": "^6.8.3",
     "exceljs": "^4.4.0",
     "googleapis": "^171.4.0",
-    "nodemailer": "^8.0.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@types/nodemailer": "^8.0.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
@@ -68,14 +66,33 @@
       "category": "public.app-category.productivity",
       "icon": "public/icon.icns",
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "win": {
       "icon": "public/icon-1024.png",
       "artifactName": "Feemo-Budget-Manager-Setup-${version}.${ext}",
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

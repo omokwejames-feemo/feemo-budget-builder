@@ -5,10 +5,11 @@ import { writeFile as writeFileAsync, readFile as readFileAsync, unlink } from '
 import { spawn } from 'child_process'
 import { tmpdir, homedir } from 'os'
 import { createServer } from 'http'
+import { createConnection } from 'net'
+import { connect as tlsConnect } from 'tls'
 import { google } from 'googleapis'
 import { createHash, randomInt } from 'crypto'
 import ElectronStore from 'electron-store'
-import nodemailer from 'nodemailer'
 
 // ── Auto-updater setup ────────────────────────────────────────────────────────
 
@@ -137,14 +138,126 @@ function setKeyRecord(hash: string, rec: KeyRecord) {
 // In-process OTP store — never hits the renderer or any file
 const pendingOtps = new Map<string, { code: string; expiry: number; attempts: number }>()
 
+// Email credentials — injected at build time by Vite define (from .env / CI secrets)
 declare const __EMAIL_USER__: string
 declare const __EMAIL_PASS__: string
 declare const __EMAIL_FROM__: string
 
-function makeTransport() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: __EMAIL_USER__, pass: __EMAIL_PASS__ },
+function getEmailCreds() {
+  const user = (typeof __EMAIL_USER__ !== 'undefined' ? __EMAIL_USER__ : '') || process.env.EMAIL_USER || ''
+  const pass = (typeof __EMAIL_PASS__ !== 'undefined' ? __EMAIL_PASS__ : '') || process.env.EMAIL_PASS || ''
+  const from = (typeof __EMAIL_FROM__ !== 'undefined' ? __EMAIL_FROM__ : '') || process.env.EMAIL_FROM || user
+  return { user, pass, from }
+}
+
+// Raw SMTP sender — bypasses nodemailer entirely so Electron's module loader
+// cannot interfere with credential injection.
+function sendSmtpGmail(opts: {
+  user: string; pass: string; from: string
+  to: string; subject: string; text: string; html: string
+}): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const { user, pass, from, to, subject, text, html } = opts
+    const boundary = `feemo_${Math.random().toString(36).slice(2)}`
+    const crlf = '\r\n'
+    const authPlain = Buffer.from(`\0${user}\0${pass}`).toString('base64')
+
+    const msgBody = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      text,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      html,
+      '',
+      `--${boundary}--`,
+    ].join(crlf) + crlf
+
+    type Stage = 'greeting' | 'ehlo' | 'starttls' | 'ehlo2' | 'auth' | 'mail' | 'rcpt' | 'data' | 'quit' | 'done'
+    let stage: Stage = 'greeting'
+    let rawSocket: any = null
+    let tlsSock: any = null
+    let settled = false
+    let recvBuf = ''
+
+    const finish = (err?: Error) => {
+      if (settled) return
+      settled = true
+      try { tlsSock?.destroy() } catch {}
+      try { rawSocket?.destroy() } catch {}
+      err ? reject(err) : resolve()
+    }
+
+    const write = (cmd: string) => {
+      const s = tlsSock ?? rawSocket
+      if (s && !s.destroyed) s.write(cmd + crlf)
+    }
+
+    const onLine = (line: string) => {
+      if (line.length >= 4 && line[3] === '-') return // continuation
+      const code = line.slice(0, 3)
+      switch (stage) {
+        case 'greeting':
+          if (code !== '220') return finish(new Error(`SMTP greeting: ${line}`))
+          stage = 'ehlo'; write('EHLO feemo.local'); break
+        case 'ehlo':
+          if (code !== '250') return finish(new Error(`EHLO: ${line}`))
+          stage = 'starttls'; write('STARTTLS'); break
+        case 'starttls':
+          if (code !== '220') return finish(new Error(`STARTTLS: ${line}`))
+          rawSocket.removeAllListeners('data')
+          tlsSock = tlsConnect({ socket: rawSocket, servername: 'smtp.gmail.com' })
+          tlsSock.on('data', (d: Buffer) => feed(d.toString()))
+          tlsSock.on('error', (e: Error) => finish(e))
+          tlsSock.once('secureConnect', () => { stage = 'ehlo2'; write('EHLO feemo.local') })
+          break
+        case 'ehlo2':
+          if (code !== '250') return finish(new Error(`EHLO2: ${line}`))
+          stage = 'auth'; write(`AUTH PLAIN ${authPlain}`); break
+        case 'auth':
+          if (code !== '235') return finish(new Error(`AUTH: ${line}`))
+          stage = 'mail'; write(`MAIL FROM:<${user}>`); break
+        case 'mail':
+          if (code !== '250') return finish(new Error(`MAIL FROM: ${line}`))
+          stage = 'rcpt'; write(`RCPT TO:<${to}>`); break
+        case 'rcpt':
+          if (code !== '250') return finish(new Error(`RCPT TO: ${line}`))
+          stage = 'data'; write('DATA'); break
+        case 'data':
+          if (code !== '354') return finish(new Error(`DATA: ${line}`))
+          stage = 'quit'; write(msgBody); write('.'); break
+        case 'quit':
+          if (code !== '250') return finish(new Error(`Message rejected: ${line}`))
+          stage = 'done'; write('QUIT'); break
+        case 'done':
+          finish(); break
+      }
+    }
+
+    const feed = (chunk: string) => {
+      recvBuf += chunk
+      let idx: number
+      while ((idx = recvBuf.indexOf('\n')) !== -1) {
+        const line = recvBuf.slice(0, idx).trimEnd()
+        recvBuf = recvBuf.slice(idx + 1)
+        if (line) onLine(line)
+      }
+    }
+
+    rawSocket = createConnection({ host: 'smtp.gmail.com', port: 587 })
+    rawSocket.on('data', (d: Buffer) => feed(d.toString()))
+    rawSocket.on('error', (e: Error) => finish(e))
+    rawSocket.on('close', () => { if (!settled) finish(new Error('SMTP connection closed unexpectedly')) })
+    rawSocket.setTimeout(30000, () => finish(new Error('SMTP timeout')))
   })
 }
 
@@ -200,9 +313,9 @@ ipcMain.handle('beta-send-code', async (_event, { key, email }: { key: string; e
   pendingOtps.set(hash, { code, expiry: Date.now() + 10 * 60 * 1000, attempts: 0 })
 
   try {
-    const transport = makeTransport()
-    await transport.sendMail({
-      from: __EMAIL_FROM__,
+    const { user, pass, from } = getEmailCreds()
+    await sendSmtpGmail({
+      user, pass, from,
       to: trimEmail,
       subject: 'Feemo Budget Manager — Verify Your Beta Access',
       text: [

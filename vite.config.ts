@@ -27,7 +27,7 @@ export default defineConfig({
             outDir: 'dist-electron',
             sourcemap: true,
             rollupOptions: {
-              external: ['googleapis', 'electron-updater', 'electron', 'fs', 'path', 'os', 'https', 'http', 'stream', 'crypto', 'electron-store', 'conf', 'nodemailer'],
+              external: ['googleapis', 'electron-updater', 'electron', 'fs', 'path', 'os', 'net', 'tls', 'https', 'http', 'stream', 'crypto', 'electron-store', 'conf'],
             },
           },
         },
