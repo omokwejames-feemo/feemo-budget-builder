@@ -1,7 +1,3 @@
-import * as dotenv from 'dotenv'
-import { join as joinPath } from 'path'
-dotenv.config({ path: joinPath(process.cwd(), '.env') })
-
 import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join, dirname } from 'path'
@@ -141,13 +137,14 @@ function setKeyRecord(hash: string, rec: KeyRecord) {
 // In-process OTP store — never hits the renderer or any file
 const pendingOtps = new Map<string, { code: string; expiry: number; attempts: number }>()
 
+declare const __EMAIL_USER__: string
+declare const __EMAIL_PASS__: string
+declare const __EMAIL_FROM__: string
+
 function makeTransport() {
   return nodemailer.createTransport({
     service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
+    auth: { user: __EMAIL_USER__, pass: __EMAIL_PASS__ },
   })
 }
 
@@ -205,7 +202,7 @@ ipcMain.handle('beta-send-code', async (_event, { key, email }: { key: string; e
   try {
     const transport = makeTransport()
     await transport.sendMail({
-      from: process.env.EMAIL_FROM ?? process.env.EMAIL_USER,
+      from: __EMAIL_FROM__,
       to: trimEmail,
       subject: 'Feemo Budget Manager — Verify Your Beta Access',
       text: [

@@ -29,6 +29,9 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_PUBLISH: never
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
 
       - name: Upload mac artifacts
         uses: actions/upload-artifact@v4
@@ -58,6 +61,9 @@ jobs:
         env:
           ELECTRON_BUILDER_PUBLISH: never
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
 
       - name: Upload windows artifacts
         uses: actions/upload-artifact@v4
@@ -100,9 +106,19 @@ jobs:
           body: |
             ## What's new in v${{ steps.version.outputs.version }}
 
-            - Fix: Restart and Apply now works — bypasses Squirrel.Mac with a shell-script updater that extracts and applies the update after the app exits
-            - Fix: Feemovision logo now displays correctly in the About tab and all screens in the packaged app
+            **Beta Security System**
+            - Full key-based access gate — 20 unique FEEMO-XXXX-XXXX keys, each bound to a single email address
+            - Email verification via 6-digit one-time code on first use (expires in 10 minutes)
+            - Keys activate on first use with a 5-day access window
+            - Verified session stored locally — no re-entry required on subsequent launches
+            - Master key for internal use bypasses email verification entirely
+
+            **Upload Existing Budget**
+            - New "Upload Existing Budget" entry point on the home screen
+            - Reads any Excel budget and auto-detects: title, company, total budget, currency, shoot days, department allocations, timeline phases, VAT/WHT/contingency/production fee percentages
+            - Confirmation screen lets you review and correct every detected value before committing
+            - Missing data dialog lists all undetected fields with inline inputs and per-field Skip option
 
             ---
-            Mac: download the .dmg — open it and drag to Applications for first install.
-            Windows: download the .exe and run the installer.
+            **Mac:** download the `.dmg` — open it and drag to Applications.
+            **Windows:** download the `.exe` and run the installer.
