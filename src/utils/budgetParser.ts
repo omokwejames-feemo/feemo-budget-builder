@@ -1,46 +1,135 @@
-// Budget Parser — reads an Excel workbook buffer and extracts production budget data.
-// Uses ExcelJS (already a project dependency).
+// Intelligent multi-sheet workbook parser — Fix Batch 8
+// Scans every sheet in a workbook, classifies by content type, runs
+// type-specific parsers, scores confidence, and flags cross-sheet conflicts.
 
 import ExcelJS from 'exceljs'
-import { DEPARTMENTS, DeptCode, LineItem } from '../store/budgetStore'
+import type { DeptCode, LineItem, SalaryRole, PaymentSchedule, PaymentScheduleRow } from '../store/budgetStore'
+import { DEPARTMENTS } from '../store/budgetStore'
 
-export interface ParsedBudget {
-  // Project details
-  title: string | null
-  company: string | null
-  totalBudget: number | null
-  currency: string | null
-  shootDays: number | null
-  startDate: string | null
+// ─── Public types ─────────────────────────────────────────────────────────────
 
-  // Assumptions
-  productionFeePercent: number | null
-  contingencyPercent: number | null
-  vatRate: number | null
-  whtRate: number | null
+export type Confidence = 'high' | 'medium' | 'low'
 
-  // Timeline (months)
-  developmentMonths: number | null
-  preProdMonths: number | null
-  shootMonths: number | null
-  postMonths: number | null
+export type SheetType =
+  | 'budget-summary'
+  | 'salary-forecast'
+  | 'production-forecast'
+  | 'production-timeline'
+  | 'payment-schedule'
+  | 'assumptions'
+  | 'dept-allocations'
+  | 'unknown'
 
-  // Departments
-  deptAllocations: Partial<Record<DeptCode, number>>
-  lineItems: Partial<Record<DeptCode, LineItem[]>>
+export interface ScoredField<T> {
+  value: T
+  confidence: Confidence
+  source: string
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+export interface SheetClassification {
+  name: string
+  type: SheetType
+  score: number
+  ambiguous: boolean
+  alternativeType?: SheetType
+  rowCount: number
+}
 
-function cellText(cell: ExcelJS.Cell): string {
+export interface ParsedConflict {
+  field: string
+  label: string
+  sources: Array<{ sheet: string; value: number | string }>
+  chosenSource: string | null
+}
+
+export type ParsedPaymentSchedule = Partial<PaymentSchedule> & { _sheetName: string }
+
+export interface ParsedForecastRow {
+  label: string
+  deptCode: DeptCode | null
+  monthlyValues: Record<number, number>
+}
+
+export interface ParsedWorkbook {
+  // Scalar fields — each carries confidence and source sheet
+  title: ScoredField<string> | null
+  company: ScoredField<string> | null
+  totalBudget: ScoredField<number> | null
+  currency: ScoredField<string> | null
+  shootDays: ScoredField<number> | null
+  startDate: ScoredField<string> | null
+  productionFeePercent: ScoredField<number> | null
+  contingencyPercent: ScoredField<number> | null
+  vatRate: ScoredField<number> | null
+  whtRate: ScoredField<number> | null
+  developmentMonths: ScoredField<number> | null
+  preProdMonths: ScoredField<number> | null
+  shootMonths: ScoredField<number> | null
+  postMonths: ScoredField<number> | null
+
+  // Collections
+  deptAllocations: Partial<Record<DeptCode, ScoredField<number>>>  // absolute amounts from budget sheets
+  deptAllocationsRaw: Partial<Record<DeptCode, number>>            // percentages from assumptions sheets
+  lineItems: Partial<Record<DeptCode, LineItem[]>>
+  salaryRoles: SalaryRole[]
+  paymentSchedules: ParsedPaymentSchedule[]
+  forecastRows: ParsedForecastRow[]
+
+  // Conflicts & meta
+  conflicts: ParsedConflict[]
+  sheets: SheetClassification[]
+  warnings: string[]
+}
+
+// ─── Keyword dictionaries ─────────────────────────────────────────────────────
+
+const SHEET_KEYWORDS: Record<SheetType, string[]> = {
+  'budget-summary': [
+    'budget', 'production budget', 'line item', 'sch no', 'sched no', 'schedule no',
+    'detail', 'allocated', 'qty', 'unit', 'department', 'code', 'below the line',
+    'grand total', 'total budget', 'ie', 'i e', 'above the line',
+  ],
+  'salary-forecast': [
+    'salary', 'payroll', 'crew', 'cast', 'personnel', 'role', 'position', 'name',
+    'daily rate', 'weekly rate', 'flat fee', 'gross', 'net', 'paye', 'tax',
+    'monthly salary', 'days', 'weeks', 'shoot days', 'fee',
+  ],
+  'production-forecast': [
+    'forecast', 'cashflow', 'cash flow', 'monthly', 'drawdown', 'period',
+    'cumulative', 'running total', 'projection', 'installment', 'disbursement',
+    'month 1', 'month 2', 'month 3',
+  ],
+  'production-timeline': [
+    'timeline', 'gantt', 'phase', 'milestone', 'start date', 'end date',
+    'duration', 'weeks', 'pre-production', 'principal photography', 'post-production',
+    'development', 'delivery', 'wrap', 'schedule',
+  ],
+  'payment-schedule': [
+    'payment schedule', 'payee', 'amount payable', 'account number', 'bank',
+    'wht', 'vat', 'net payable', 'invoice', 'prepared by', 'approved by',
+    'ps-', 'payment no', 'beneficiary', 'gross payment',
+  ],
+  'assumptions': [
+    'assumption', 'production fee', 'contingency', 'vat rate', 'wht rate',
+    'currency', 'overhead', 'insurance', 'completion bond', 'exchange rate',
+    'percentage', 'rate %', 'project details', 'total budget',
+  ],
+  'dept-allocations': [
+    'department', 'allocation', 'breakdown', 'total per department', 'dept',
+    'percentage', 'split', 'budget breakdown', 'dept %',
+  ],
+  'unknown': [],
+}
+
+// ─── Cell helpers ─────────────────────────────────────────────────────────────
+
+function cellStr(cell: ExcelJS.Cell): string {
   const v = cell.value
   if (v === null || v === undefined) return ''
-  if (typeof v === 'object' && 'richText' in (v as object)) {
+  if (typeof v === 'object' && 'richText' in (v as object))
     return (v as ExcelJS.CellRichTextValue).richText.map(r => r.text).join('')
-  }
-  if (typeof v === 'object' && 'result' in (v as object)) {
+  if (typeof v === 'object' && 'result' in (v as object))
     return String((v as ExcelJS.CellFormulaValue).result ?? '')
-  }
   return String(v)
 }
 
@@ -51,260 +140,788 @@ function cellNum(cell: ExcelJS.Cell): number | null {
     const r = (v as ExcelJS.CellFormulaValue).result
     if (typeof r === 'number') return r
   }
-  const parsed = parseFloat(cellText(cell))
-  return isNaN(parsed) ? null : parsed
+  const s = cellStr(cell).replace(/[,\s₦$£€]/g, '')
+  const n = parseFloat(s)
+  return isNaN(n) ? null : n
 }
 
-function lc(s: string) { return s.toLowerCase() }
-
-function matchesDept(text: string): DeptCode | null {
-  const t = lc(text)
-  for (const dept of DEPARTMENTS) {
-    if (t.includes(lc(dept.name))) return dept.code
-    // Short name fragments
-    if (dept.code === 'G' && (t.includes('camera') || t.includes('cam dept'))) return 'G'
-    if (dept.code === 'H' && t.includes('sound')) return 'H'
-    if (dept.code === 'I' && t.includes('light')) return 'I'
-    if (dept.code === 'J' && t.includes('art dept')) return 'J'
-    if (dept.code === 'E' && (t.includes('cast') || t.includes('talent'))) return 'E'
-    if (dept.code === 'FF' && (t.includes('post') || t.includes('edit') || t.includes('colour') || t.includes('color') || t.includes('grade') || t.includes('sound mix') || t.includes('vfx') || t.includes('online') || t.includes('delivery'))) return 'FF'
-    if (dept.code === 'II' && (t.includes('contingency') || t.includes('production fee'))) return 'II'
-    if (dept.code === 'GG' && t.includes('overhead')) return 'GG'
-    if (dept.code === 'EE' && t.includes('music')) return 'EE'
-    if (dept.code === 'S' && t.includes('travel')) return 'S'
-    if (dept.code === 'T' && (t.includes('accommodation') || t.includes('meals') || t.includes('hotel'))) return 'T'
-    if (dept.code === 'Q' && t.includes('location')) return 'Q'
-    if (dept.code === 'R' && (t.includes('vehicle') || t.includes('transport'))) return 'R'
-    if (dept.code === 'M' && t.includes('wardrobe')) return 'M'
-    if (dept.code === 'N' && (t.includes('makeup') || t.includes('make-up') || t.includes('hair') || t.includes('sfx'))) return 'N'
-    if (dept.code === 'HH' && t.includes('insurance')) return 'HH'
-  }
-  return null
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 %.]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-// Detect currency symbol or code in a string
+function parseNum(s: string): number | null {
+  const n = parseFloat(s.replace(/[,\s₦$£€%]/g, ''))
+  return isNaN(n) ? null : n
+}
+
 function detectCurrency(text: string): string | null {
-  if (text.includes('₦') || lc(text).includes('ngn')) return 'NGN'
-  if (text.includes('$')) return 'USD'
-  if (text.includes('£')) return 'GBP'
-  if (text.includes('€')) return 'EUR'
+  const t = text.toLowerCase()
+  if (text.includes('₦') || t.includes('ngn') || t.includes('naira')) return 'NGN'
+  if (text.includes('$') || t.includes('usd') || t.includes('dollar')) return 'USD'
+  if (text.includes('£') || t.includes('gbp') || t.includes('pound')) return 'GBP'
+  if (text.includes('€') || t.includes('eur') || t.includes('euro')) return 'EUR'
   return null
 }
 
-// Infer a percentage from a value and its base (contingency amount / subtotal)
-function inferPercent(amount: number, base: number): number | null {
-  if (base <= 0 || amount <= 0) return null
-  const pct = (amount / base) * 100
-  // Sanity check — production percentages are typically 0.5–30%
-  if (pct < 0.1 || pct > 50) return null
-  return Math.round(pct * 100) / 100
+let _seq = 20000
+const uid = () => `up_${++_seq}`
+
+// ─── Department matching ──────────────────────────────────────────────────────
+
+const DEPT_ALIASES: Partial<Record<DeptCode, string[]>> = {
+  A:  ['research', 'development', 'r&d', 'r & d'],
+  B:  ['script', 'writer', 'screenplay', 'writing'],
+  C:  ['producer', 'production manager', 'prod manager', 'line producer'],
+  D:  ['director', 'dop', 'director of photography'],
+  E:  ['cast', 'talent', 'actor', 'actress', 'presenter', 'artiste'],
+  F:  ['production staff', 'general crew', 'runner', 'coordinator'],
+  G:  ['camera', 'cam dept', 'grip', 'focus puller'],
+  H:  ['sound', 'audio', 'boom'],
+  I:  ['lighting', 'light', 'electrical', 'gaffer', 'spark'],
+  J:  ['art dept', 'art direction', 'set design', 'production design'],
+  K:  ['set', 'set build', 'construction'],
+  L:  ['props', 'properties'],
+  M:  ['wardrobe', 'costume', 'stylist'],
+  N:  ['makeup', 'make-up', 'hair', 'sfx makeup', 'mua'],
+  O:  ['picture vehicle', 'featured vehicle'],
+  P:  ['studio', 'facility', 'ob van', 'ob facility'],
+  Q:  ['location', 'location fee', 'scout'],
+  R:  ['vehicle', 'transport', 'logistics', 'driver'],
+  S:  ['travel', 'flight', 'airfare', 'per diem travel'],
+  T:  ['accommodation', 'hotel', 'meal', 'per diem', 'catering', 'feeding'],
+  AA: ['stock', 'media', 'tape', 'card', 'raw stock'],
+  DD: ['graphic', 'motion graphic', 'title', 'animation'],
+  EE: ['music', 'composer', 'soundtrack', 'score'],
+  FF: ['post', 'edit', 'colour', 'color', 'grade', 'mix', 'vfx', 'visual effect', 'online', 'delivery', 'post-production', 'post production'],
+  GG: ['overhead', 'office', 'admin', 'overheads'],
+  HH: ['insurance', 'bond', 'completion bond'],
+  II: ['contingency', 'production fee', 'reserve', 'management fee'],
 }
 
-// ─── Main parser ──────────────────────────────────────────────────────────────
+function matchDept(text: string): DeptCode | null {
+  if (!text || !text.trim()) return null
+  const upper = text.trim().toUpperCase()
 
-export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedBudget> {
-  const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(buffer)
+  // Two-letter code prefix first
+  for (const code of ['AA', 'DD', 'EE', 'FF', 'GG', 'HH', 'II']) {
+    if (upper.startsWith(code) && (upper.length === 2 || /^[A-Z]{2}[\s.\-/]/.test(upper)))
+      return code as DeptCode
+  }
+  // Single-letter code prefix
+  if (/^[A-T][\s.\-/]/.test(upper) || (upper.length === 1 && /^[A-T]$/.test(upper)))
+    return upper[0] as DeptCode
 
-  const result: ParsedBudget = {
-    title: null, company: null, totalBudget: null, currency: null,
-    shootDays: null, startDate: null,
-    productionFeePercent: null, contingencyPercent: null, vatRate: null, whtRate: null,
-    developmentMonths: null, preProdMonths: null, shootMonths: null, postMonths: null,
-    deptAllocations: {}, lineItems: {},
+  const t = norm(text)
+  for (const [code, aliases] of Object.entries(DEPT_ALIASES)) {
+    if (aliases.some(a => t.includes(a))) return code as DeptCode
+  }
+  return null
+}
+
+// ─── Sheet classification ─────────────────────────────────────────────────────
+
+function extractSheetText(ws: ExcelJS.Worksheet, maxRows = 12): string {
+  const parts: string[] = [norm(ws.name)]
+  let count = 0
+  ws.eachRow(row => {
+    if (count++ >= maxRows) return
+    row.eachCell(cell => {
+      const t = norm(cellStr(cell))
+      if (t.length > 1) parts.push(t)
+    })
+  })
+  return parts.join(' ')
+}
+
+function scoreType(text: string, type: SheetType): number {
+  if (type === 'unknown') return 0
+  const kws = SHEET_KEYWORDS[type]
+  let hits = 0
+  for (const kw of kws) {
+    if (text.includes(norm(kw))) hits++
+  }
+  return hits / kws.length
+}
+
+function classifySheet(ws: ExcelJS.Worksheet): SheetClassification {
+  const text = extractSheetText(ws)
+  const types: SheetType[] = [
+    'assumptions', 'budget-summary', 'salary-forecast',
+    'production-forecast', 'production-timeline', 'payment-schedule', 'dept-allocations',
+  ]
+  const scored = types
+    .map(t => ({ type: t, score: scoreType(text, t) }))
+    .sort((a, b) => b.score - a.score)
+
+  const best = scored[0]
+  const second = scored[1]
+
+  // Also check sheet name alone for payment schedule
+  const nameLower = ws.name.toLowerCase()
+  if (/^ps[\-\s]?\d+/i.test(ws.name) || nameLower.includes('payment schedule')) {
+    return { name: ws.name, type: 'payment-schedule', score: 1, ambiguous: false, rowCount: ws.rowCount }
   }
 
-  let subtotalForInference: number | null = null
-  let contingencyAmount: number | null = null
-  let productionFeeAmount: number | null = null
+  if (best.score < 0.12) {
+    return { name: ws.name, type: 'unknown', score: 0, ambiguous: false, rowCount: ws.rowCount }
+  }
 
-  for (const ws of wb.worksheets) {
-    ws.eachRow((row, rowNum) => {
-      const cells = row.values as ExcelJS.CellValue[]
-      // row.values is 1-indexed and sparse — use Array.from so no holes remain
-      const len = Math.max(0, cells.length - 1)
-      const texts = Array.from({ length: len }, (_, idx) => {
-        const c = cells[idx + 1]
-        if (c === null || c === undefined) return ''
-        if (typeof c === 'object' && 'richText' in (c as object)) {
-          return (c as ExcelJS.CellRichTextValue).richText.map(r => r.text).join('')
-        }
-        if (typeof c === 'object' && 'result' in (c as object)) {
-          return String((c as ExcelJS.CellFormulaValue).result ?? '')
-        }
-        return String(c)
-      })
-      const nums = Array.from({ length: len }, (_, idx) => {
-        const c = cells[idx + 1]
-        if (typeof c === 'number') return c
-        if (typeof c === 'object' && c !== null && 'result' in (c as object)) {
-          const r = (c as ExcelJS.CellFormulaValue).result
-          if (typeof r === 'number') return r
-        }
-        return null
-      })
+  const ambiguous = second.score > 0 && best.score > 0 &&
+    (best.score - second.score) / best.score < 0.2
 
-      for (let i = 0; i < texts.length; i++) {
-        const t = texts[i] ?? ''
-        const tl = lc(t)
-        const firstNum = nums.find(n => n !== null) ?? null
-        const adjacentNum = nums[i + 1] ?? nums[i] ?? null
+  return {
+    name: ws.name,
+    type: best.type,
+    score: best.score,
+    ambiguous,
+    alternativeType: ambiguous ? second.type : undefined,
+    rowCount: ws.rowCount,
+  }
+}
 
-        // ── Currency detection ────────────────────────────────────────────
-        if (!result.currency) {
-          const cur = detectCurrency(t)
-          if (cur) result.currency = cur
-        }
+// ─── Row helpers ──────────────────────────────────────────────────────────────
 
-        // ── Project title ─────────────────────────────────────────────────
-        if (!result.title && (tl.includes('production title') || tl.includes('project title') || tl.includes('film title') || tl.includes('show title'))) {
-          const next = texts[i + 1] ?? texts[i + 2] ?? null
-          if (next && next.trim() && next.trim().length < 120) result.title = next.trim()
-        }
+function denseTexts(row: ExcelJS.Row, cols = 14): string[] {
+  return Array.from({ length: cols }, (_, i) => {
+    const c = row.getCell(i + 1)
+    return cellStr(c)
+  })
+}
 
-        // ── Company ───────────────────────────────────────────────────────
-        if (!result.company && (tl.includes('production company') || tl.includes('company name') || tl.includes('prod. company'))) {
-          const next = texts[i + 1] ?? texts[i + 2] ?? null
-          if (next && next.trim() && next.trim().length < 120) result.company = next.trim()
-        }
+function denseNums(row: ExcelJS.Row, cols = 14): (number | null)[] {
+  return Array.from({ length: cols }, (_, i) => cellNum(row.getCell(i + 1)))
+}
 
-        // ── Total budget ──────────────────────────────────────────────────
-        if (!result.totalBudget && (tl.includes('total budget') || tl.includes('grand total') || tl.includes('total production'))) {
-          for (let j = i + 1; j < Math.min(i + 6, nums.length); j++) {
-            if (nums[j] && (nums[j] as number) > 1000) { result.totalBudget = nums[j] as number; break }
-          }
-          if (!result.totalBudget && firstNum && firstNum > 1000) result.totalBudget = firstNum
-        }
+function extractPercent(row: ExcelJS.Row): number | null {
+  for (let c = 1; c <= 10; c++) {
+    const s = cellStr(row.getCell(c))
+    if (s.includes('%')) {
+      const v = parseFloat(s.replace('%', '').replace(/[,\s]/g, ''))
+      if (!isNaN(v) && v > 0 && v <= 50) return v
+    }
+    const n = cellNum(row.getCell(c))
+    if (n !== null && n > 0 && n <= 1) return parseFloat((n * 100).toFixed(2))
+    if (n !== null && n > 1 && n <= 50) return n
+  }
+  return null
+}
 
-        // ── Shoot days ────────────────────────────────────────────────────
-        if (!result.shootDays && (tl.includes('shoot day') || tl.includes('shooting day') || tl.includes('camera day') || tl.includes('principal photography'))) {
-          for (let j = i; j < Math.min(i + 5, nums.length); j++) {
-            if (nums[j] && (nums[j] as number) >= 1 && (nums[j] as number) <= 365) {
-              result.shootDays = nums[j] as number; break
-            }
-          }
-        }
+function tryParseDate(s: string): Date | null {
+  if (!s || s.length < 6) return null
+  // DD/MM/YYYY (Nigerian format preferred)
+  const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (dmy) {
+    const d = new Date(+dmy[3], +dmy[2] - 1, +dmy[1])
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return d
+  }
+  // YYYY-MM-DD
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) { const d = new Date(s); if (!isNaN(d.getTime())) return d }
+  // "January 2025" or "Jan-2025"
+  const my = s.match(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[\s\-,](\d{4})$/i)
+  if (my) {
+    const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+    const m = months.indexOf(my[1].toLowerCase().slice(0, 3))
+    if (m >= 0) return new Date(+my[2], m, 1)
+  }
+  return null
+}
 
-        // ── Production fee ────────────────────────────────────────────────
-        if (tl.includes('production fee') || tl.includes('producer fee') || tl.includes('management fee')) {
-          // Check if a % sign is in the row
-          const pctCell = texts.find(tx => tx.includes('%'))
-          if (pctCell) {
-            const pctVal = parseFloat(pctCell.replace('%', ''))
-            if (!isNaN(pctVal) && pctVal > 0 && pctVal <= 30) result.productionFeePercent = pctVal
-          }
-          // Store amount for later inference
-          for (let j = i; j < Math.min(i + 6, nums.length); j++) {
-            if (nums[j] && (nums[j] as number) > 0) { productionFeeAmount = nums[j] as number; break }
-          }
-        }
+// ─── Assumptions parser ───────────────────────────────────────────────────────
 
-        // ── Contingency ───────────────────────────────────────────────────
-        if (tl.includes('contingency')) {
-          const pctCell = texts.find(tx => tx.includes('%'))
-          if (pctCell) {
-            const pctVal = parseFloat(pctCell.replace('%', ''))
-            if (!isNaN(pctVal) && pctVal > 0 && pctVal <= 30) result.contingencyPercent = pctVal
-          }
-          for (let j = i; j < Math.min(i + 6, nums.length); j++) {
-            if (nums[j] && (nums[j] as number) > 0) { contingencyAmount = nums[j] as number; break }
-          }
-        }
+function parseAssumptionsSheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
+  const r: Partial<ParsedWorkbook> = { deptAllocationsRaw: {} }
 
-        // ── VAT ───────────────────────────────────────────────────────────
-        if (!result.vatRate && (tl.includes('vat') || tl.includes('value added tax'))) {
-          const pctCell = texts.find(tx => tx.includes('%'))
-          if (pctCell) {
-            const v = parseFloat(pctCell.replace('%', ''))
-            if (!isNaN(v) && v > 0 && v <= 30) result.vatRate = v
-          }
-          if (!result.vatRate && adjacentNum && adjacentNum > 0 && adjacentNum <= 30) result.vatRate = adjacentNum
-        }
+  ws.eachRow(row => {
+    const texts = denseTexts(row, 8)
+    const nums = denseNums(row, 8)
+    const col1 = norm(texts[0])
+    const col2 = texts[1].trim()
 
-        // ── WHT ───────────────────────────────────────────────────────────
-        if (!result.whtRate && (tl.includes('wht') || tl.includes('withholding') || tl.includes('withholding tax'))) {
-          const pctCell = texts.find(tx => tx.includes('%'))
-          if (pctCell) {
-            const v = parseFloat(pctCell.replace('%', ''))
-            if (!isNaN(v) && v > 0 && v <= 30) result.whtRate = v
-          }
-          if (!result.whtRate && adjacentNum && adjacentNum > 0 && adjacentNum <= 30) result.whtRate = adjacentNum
-        }
+    // Currency from any cell
+    if (!r.currency) {
+      for (const t of texts) {
+        const cur = detectCurrency(t)
+        if (cur) { r.currency = { value: cur, confidence: 'high', source: sheetName }; break }
+      }
+    }
 
-        // ── Subtotal (for inference) ───────────────────────────────────────
-        if ((tl.includes('subtotal') || tl.includes('sub total') || tl.includes('below the line') || tl.includes('total below')) && !subtotalForInference) {
-          for (let j = i; j < Math.min(i + 6, nums.length); j++) {
-            if (nums[j] && (nums[j] as number) > 10000) { subtotalForInference = nums[j] as number; break }
-          }
-        }
+    // Total budget
+    if (!r.totalBudget && /total.?budget|budget.?total/.test(col1)) {
+      const v = nums.find(n => n !== null && n > 1000) ?? null
+      if (v) r.totalBudget = { value: v, confidence: 'high', source: sheetName }
+    }
 
-        // ── Timeline signals ──────────────────────────────────────────────
-        // Pre-production
-        if (!result.preProdMonths && (tl.includes('pre-prod') || tl.includes('pre production') || tl.includes('pre-production') || tl.includes('prep'))) {
-          const weeks = nums.find(n => n !== null && (n as number) >= 1 && (n as number) <= 52)
-          if (weeks) result.preProdMonths = Math.round((weeks as number) / 4.33 * 10) / 10
-        }
-        // Post production
-        if (!result.postMonths && (tl.includes('post production') || tl.includes('post-production') || tl.includes('edit') || tl.includes('grade') || tl.includes('mix') || tl.includes('delivery'))) {
-          const weeks = nums.find(n => n !== null && (n as number) >= 1 && (n as number) <= 52)
-          if (weeks) result.postMonths = Math.round((weeks as number) / 4.33 * 10) / 10
-        }
-        // Development
-        if (!result.developmentMonths && (tl.includes('development') || tl.includes('dev phase') || tl.includes('script'))) {
-          const weeks = nums.find(n => n !== null && (n as number) >= 1 && (n as number) <= 52)
-          if (weeks) result.developmentMonths = Math.round((weeks as number) / 4.33 * 10) / 10
-        }
+    // Title
+    if (!r.title && /production.?title|project.?title|film.?title|show.?title/.test(col1)) {
+      const s = col2 || texts[2]?.trim()
+      if (s && s.length > 0 && s.length < 150)
+        r.title = { value: s, confidence: 'high', source: sheetName }
+    }
 
-        // ── Department allocations ─────────────────────────────────────────
-        const deptCode = matchesDept(t)
-        if (deptCode) {
-          // Find largest number in this row — likely the dept total
-          const deptTotal = nums.reduce((best: number | null, n) => {
-            if (n === null) return best
-            if (best === null || (n as number) > best) return n as number
-            return best
-          }, null)
-          if (deptTotal && deptTotal > 0 && !(result.deptAllocations[deptCode])) {
-            result.deptAllocations[deptCode] = deptTotal
-          }
+    // Company
+    if (!r.company && /production.?company|company.?name/.test(col1)) {
+      const s = col2 || texts[2]?.trim()
+      if (s && s.length > 0 && s.length < 150)
+        r.company = { value: s, confidence: 'high', source: sheetName }
+    }
 
-          // ── Line items within the dept ───────────────────────────────────
-          // Look at next few rows after the dept header
-          const items = result.lineItems[deptCode] ?? []
-          const detailText = texts.filter(tx => tx.trim() && tx !== t).join(' ').trim()
-          if (detailText && nums.some(n => n !== null && (n as number) > 0)) {
-            const rate = nums.find(n => n !== null && (n as number) > 0) ?? 0
-            items.push({
-              id: `${deptCode}-${rowNum}-${i}`,
-              schedNo: deptCode,
-              detail: detailText.slice(0, 80),
-              qty: 1,
-              rate: rate as number,
-              unit: 'item',
-              ie: 'I',
-            })
-            result.lineItems[deptCode] = items
-          }
-        }
+    // Shoot days
+    if (!r.shootDays && /shoot.?day|shooting.?day|camera.?day/.test(col1)) {
+      const v = nums.find(n => n !== null && n >= 1 && n <= 365) ?? null
+      if (v) r.shootDays = { value: v, confidence: 'high', source: sheetName }
+    }
 
-        // ── Shoot months from shoot days ──────────────────────────────────
-        if (!result.shootMonths && result.shootDays) {
-          result.shootMonths = Math.round((result.shootDays / 5) / 4.33 * 10) / 10
+    // Start date
+    if (!r.startDate && /start.?date|production.?start|commencement/.test(col1)) {
+      const s = col2 || texts[2]?.trim()
+      const d = tryParseDate(s)
+      if (d) r.startDate = { value: d.toISOString().split('T')[0], confidence: 'high', source: sheetName }
+    }
+
+    // Production fee %
+    if (/production.?fee|producer.?fee|management.?fee/.test(col1)) {
+      const pct = extractPercent(row)
+      if (pct !== null) r.productionFeePercent = { value: pct, confidence: 'high', source: sheetName }
+    }
+
+    // Contingency %
+    if (/contingency/.test(col1)) {
+      const pct = extractPercent(row)
+      if (pct !== null) r.contingencyPercent = { value: pct, confidence: 'high', source: sheetName }
+    }
+
+    // VAT
+    if (!r.vatRate && /\bvat\b|value.?added.?tax/.test(col1)) {
+      const pct = extractPercent(row)
+      if (pct !== null) r.vatRate = { value: pct, confidence: 'high', source: sheetName }
+    }
+
+    // WHT
+    if (!r.whtRate && /\bwht\b|withholding/.test(col1)) {
+      const pct = extractPercent(row)
+      if (pct !== null) r.whtRate = { value: pct, confidence: 'high', source: sheetName }
+    }
+
+    // Dept allocation % from assumptions sheet
+    const deptCode = matchDept(texts[0])
+    if (deptCode) {
+      const pct = extractPercent(row)
+      if (pct !== null && !r.deptAllocationsRaw![deptCode])
+        r.deptAllocationsRaw![deptCode] = pct
+    }
+  })
+
+  return r
+}
+
+// ─── Budget summary parser ────────────────────────────────────────────────────
+
+function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
+  const r: Partial<ParsedWorkbook> = { lineItems: {}, deptAllocations: {} }
+  let currentDept: DeptCode | null = null
+
+  ws.eachRow((row, rowNum) => {
+    const texts = denseTexts(row, 12)
+    const nums = denseNums(row, 12)
+    const col1 = texts[0].trim()
+    const col2 = texts[1].trim()
+    const col1n = norm(col1)
+
+    // Currency
+    if (!r.currency) {
+      for (const t of texts) {
+        const cur = detectCurrency(t)
+        if (cur) { r.currency = { value: cur, confidence: 'medium', source: sheetName }; break }
+      }
+    }
+
+    // Grand total / total budget row
+    if (!r.totalBudget && /grand.?total|total.?budget|total.?production/.test(col1n)) {
+      const candidates = nums.filter(n => n !== null && (n as number) > 10000) as number[]
+      if (candidates.length) {
+        r.totalBudget = { value: Math.max(...candidates), confidence: 'high', source: sheetName }
+      }
+    }
+
+    // Title
+    if (!r.title && /production.?title|project.?title|film.?title/.test(col1n)) {
+      const s = col2 || texts[2]?.trim()
+      if (s && s.length < 150) r.title = { value: s, confidence: 'medium', source: sheetName }
+    }
+
+    // Skip header rows
+    if (rowNum <= 4 && /sch|sched|detail|no\.|rate|qty|unit/i.test(col1 + col2)) return
+
+    // Department header detection
+    const deptCode = matchDept(col1) ?? matchDept(col2)
+    const hasText = (col1.length > 1 || col2.length > 1)
+    const positiveNums = nums.filter(n => n !== null && (n as number) > 0) as number[]
+
+    if (deptCode && hasText) {
+      currentDept = deptCode
+      if (!r.lineItems![currentDept]) r.lineItems![currentDept] = []
+
+      // If the dept header row itself has a large number → dept total
+      if (positiveNums.length > 0) {
+        const largest = Math.max(...positiveNums)
+        if (largest > 1000 && !r.deptAllocations![currentDept]) {
+          r.deptAllocations![currentDept] = { value: largest, confidence: 'high', source: sheetName }
         }
       }
+      return
+    }
+
+    // Subtotal / total row within a department
+    if (/^(total|subtotal|dept.?target|dept.?total)/.test(col1n) || /^(total|subtotal)/.test(norm(col2))) {
+      if (currentDept && !r.deptAllocations![currentDept] && positiveNums.length) {
+        const largest = Math.max(...positiveNums)
+        if (largest > 1000)
+          r.deptAllocations![currentDept] = { value: largest, confidence: 'high', source: sheetName }
+      }
+      return
+    }
+
+    if (!currentDept) return
+
+    // Skip header-like rows
+    const detail = col2 || col1
+    if (!detail || detail.length < 2) return
+    if (/^(sch\.?no|sched|detail|no\.|rate|qty|unit|i\/e|\d+\.\s*$)/i.test(detail)) return
+
+    // Extract line item values
+    const largeNums = positiveNums.filter(n => n > 10)
+    if (!largeNums.length) return
+
+    const total = Math.max(...largeNums)
+    const schedNo = col1.length > 0 && col1.length <= 6 && !/^[a-z]/i.test(col1) ? col1 : ''
+    const qty = (nums[2] ?? nums[3] ?? null) as number | null
+    const rate = (nums[3] ?? nums[4] ?? null) as number | null
+    const unit = (texts[4] || texts[5] || 'Flat').slice(0, 20)
+
+    const effectiveRate = (rate && rate > 0 && rate !== total) ? rate : total
+    const effectiveQty = (qty && qty > 0 && qty < 5000 && qty !== total) ? qty : 1
+
+    r.lineItems![currentDept]!.push({
+      id: uid(),
+      schedNo: schedNo || `${currentDept}${(r.lineItems![currentDept]?.length ?? 0) + 1}`,
+      detail: detail.slice(0, 80),
+      qty: effectiveQty,
+      rate: Math.round(effectiveRate),
+      unit: unit || 'Flat',
+      ie: 'I',
+    })
+  })
+
+  return r
+}
+
+// ─── Salary forecast parser ───────────────────────────────────────────────────
+
+function parseSalaryForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
+  const r: Partial<ParsedWorkbook> = { salaryRoles: [] }
+
+  let monthHeaderRow = -1
+  let monthColStart = -1
+  let monthColEnd = -1
+
+  // Scan first 6 rows for month header
+  for (let rowNum = 1; rowNum <= 6; rowNum++) {
+    const row = ws.getRow(rowNum)
+    for (let c = 2; c <= 24; c++) {
+      const t = norm(cellStr(row.getCell(c)))
+      if (/^(month|m\d+|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{4})/.test(t)) {
+        monthHeaderRow = rowNum
+        monthColStart = c
+        break
+      }
+    }
+    if (monthHeaderRow > 0) break
+  }
+
+  if (monthColStart > 0) {
+    const hRow = ws.getRow(monthHeaderRow)
+    for (let c = monthColStart + 1; c <= 36; c++) {
+      const t = norm(cellStr(hRow.getCell(c)))
+      if (/total|sum|grand/.test(t)) { monthColEnd = c - 1; break }
+      if (t.length > 0) monthColEnd = c
+      else if (c > monthColStart + 2) { monthColEnd = c - 1; break }
+    }
+  }
+
+  if (monthColEnd < monthColStart) monthColEnd = monthColStart + 11 // fallback 12 months
+
+  ws.eachRow((row, rowNum) => {
+    if (rowNum <= Math.max(monthHeaderRow, 2)) return
+
+    const texts = denseTexts(row, Math.max(monthColEnd + 2, 14))
+    const col1 = texts[0].trim()
+    const col2 = texts[1].trim()
+    const roleText = col2 || col1
+    if (!roleText || roleText.length < 2) return
+    if (/^(total|subtotal|cumulative|grand|role|name|position|#|no\.|department)/i.test(roleText)) return
+
+    const deptCode = matchDept(col1) ?? matchDept(col2) ?? null
+
+    const monthlyAmounts: Record<number, number> = {}
+    if (monthColStart > 0) {
+      for (let i = 0; i <= monthColEnd - monthColStart; i++) {
+        const v = cellNum(row.getCell(monthColStart + i))
+        if (v !== null && v > 0) monthlyAmounts[i + 1] = v
+      }
+    } else {
+      // Fallback: scan numeric columns 3–20
+      for (let c = 3; c <= 20; c++) {
+        const v = cellNum(row.getCell(c))
+        if (v !== null && v > 0) monthlyAmounts[c - 2] = v
+      }
+    }
+
+    if (Object.keys(monthlyAmounts).length === 0) return
+
+    r.salaryRoles!.push({
+      id: uid(),
+      schedNo: col1.length <= 6 ? col1 : '',
+      role: roleText.slice(0, 80),
+      deptCode: (deptCode ?? 'F') as DeptCode,
+      phase: 'all',
+      monthlyAmounts,
+    })
+  })
+
+  return r
+}
+
+// ─── Production forecast parser ───────────────────────────────────────────────
+
+function parseProductionForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
+  const r: Partial<ParsedWorkbook> = { forecastRows: [] }
+
+  let monthHeaderRow = -1
+  let monthColStart = -1
+  let monthColEnd = -1
+
+  for (let rowNum = 1; rowNum <= 6; rowNum++) {
+    const row = ws.getRow(rowNum)
+    for (let c = 1; c <= 28; c++) {
+      const t = norm(cellStr(row.getCell(c)))
+      if (/^(month|m\d+|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{4})/.test(t)) {
+        monthHeaderRow = rowNum; monthColStart = c; break
+      }
+    }
+    if (monthHeaderRow > 0) break
+  }
+
+  if (monthColStart > 0) {
+    const hRow = ws.getRow(monthHeaderRow)
+    for (let c = monthColStart + 1; c <= 36; c++) {
+      const t = norm(cellStr(hRow.getCell(c)))
+      if (/total|sum|cumul/.test(t) && c > monthColStart) { monthColEnd = c - 1; break }
+      if (t.length > 0) monthColEnd = c
+      else if (c > monthColStart + 2) { monthColEnd = c - 1; break }
+    }
+  }
+
+  if (monthColStart < 0 || monthColEnd < monthColStart) return r
+
+  ws.eachRow((row, rowNum) => {
+    if (rowNum <= monthHeaderRow) return
+    const col1 = cellStr(row.getCell(1)).trim()
+    const col2 = cellStr(row.getCell(2)).trim()
+    const label = col1 || col2
+    if (!label) return
+    if (/^(total|cumulative|grand|running)/i.test(label)) return
+
+    const deptCode = matchDept(label)
+    const monthlyValues: Record<number, number> = {}
+    for (let i = 0; i <= monthColEnd - monthColStart; i++) {
+      const v = cellNum(row.getCell(monthColStart + i))
+      if (v !== null && Math.abs(v) > 0) monthlyValues[i + 1] = v
+    }
+    if (Object.keys(monthlyValues).length > 0)
+      r.forecastRows!.push({ label, deptCode, monthlyValues })
+  })
+
+  return r
+}
+
+// ─── Production timeline parser ───────────────────────────────────────────────
+
+function parseProductionTimelineSheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
+  const r: Partial<ParsedWorkbook> = {}
+
+  const phases: Record<string, { weeks: number | null }> = {
+    dev: { weeks: null }, pre: { weeks: null },
+    shoot: { weeks: null }, post: { weeks: null },
+  }
+
+  let earliestDate: Date | null = null
+
+  ws.eachRow(row => {
+    const texts = denseTexts(row, 10)
+    const nums = denseNums(row, 10)
+    const col1 = norm(texts[0])
+
+    // Date detection
+    for (let c = 0; c < 10; c++) {
+      const cv = row.getCell(c + 1).value
+      let d: Date | null = null
+      if (cv instanceof Date) d = cv
+      else d = tryParseDate(texts[c])
+      if (d && d.getFullYear() > 2000) {
+        if (!earliestDate || d < earliestDate) earliestDate = d
+      }
+    }
+
+    const weekNum = nums.find(n => n !== null && (n as number) >= 1 && (n as number) <= 104) as number | null
+
+    if (/development|dev.?phase/.test(col1) && !phases.dev.weeks && weekNum)
+      phases.dev.weeks = weekNum
+    if (/pre.?prod|pre.?production|prep/.test(col1) && !phases.pre.weeks && weekNum)
+      phases.pre.weeks = weekNum
+    if (/principal|shoot|photography/.test(col1) && !phases.shoot.weeks && weekNum)
+      phases.shoot.weeks = weekNum
+    if (/post.?prod|post.?production|edit|grade|delivery/.test(col1) && !phases.post.weeks && weekNum)
+      phases.post.weeks = weekNum
+  })
+
+  const wk2mo = (w: number) => Math.round(w / 4.33 * 10) / 10
+
+  if (phases.dev.weeks) r.developmentMonths = { value: wk2mo(phases.dev.weeks), confidence: 'medium', source: sheetName }
+  if (phases.pre.weeks) r.preProdMonths = { value: wk2mo(phases.pre.weeks), confidence: 'medium', source: sheetName }
+  if (phases.shoot.weeks) r.shootMonths = { value: wk2mo(phases.shoot.weeks), confidence: 'medium', source: sheetName }
+  if (phases.post.weeks) r.postMonths = { value: wk2mo(phases.post.weeks), confidence: 'medium', source: sheetName }
+  if (earliestDate) r.startDate = { value: (earliestDate as Date).toISOString().split('T')[0], confidence: 'medium', source: sheetName }
+
+  return r
+}
+
+// ─── Payment schedule parser ──────────────────────────────────────────────────
+
+function parsePaymentScheduleSheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
+  const r: Partial<ParsedWorkbook> = { paymentSchedules: [] }
+
+  // Extract schedule number from sheet name or header
+  let scheduleNumber = sheetName.replace(/\s+/g, '-').toUpperCase()
+  const psMatch = sheetName.match(/PS[\-\s]?(\d+)/i)
+  if (psMatch) scheduleNumber = `PS-${psMatch[1].padStart(3, '0')}`
+
+  // Find column header row
+  const colMap: Record<string, number> = {}
+  let headerRowNum = -1
+
+  for (let rn = 1; rn <= 10; rn++) {
+    const row = ws.getRow(rn)
+    const texts = denseTexts(row, 16).map(norm)
+    let found = 0
+
+    for (let i = 0; i < texts.length; i++) {
+      const t = texts[i]
+      if (!t) continue
+      if (/payee|pay.?to|beneficiary/.test(t)) { colMap.payee = i + 1; found++; headerRowNum = rn }
+      if (/description|narration|detail/.test(t)) { colMap.description = i + 1; found++ }
+      if (/budget.?code|sch|^code$/.test(t) && !colMap.budgetCode) { colMap.budgetCode = i + 1 }
+      if (/^bank/.test(t)) { colMap.bank = i + 1; found++ }
+      if (/account|acct/.test(t)) { colMap.account = i + 1 }
+      if (/payment.?value|gross.?payment|gross.?amount/.test(t)) { colMap.value = i + 1; found++ }
+      if (/\bvat\b/.test(t) && !colMap.vat) colMap.vat = i + 1
+      if (/\bwht\b|withholding/.test(t) && !colMap.wht) colMap.wht = i + 1
+      if (/amount.?payable|net.?payable|net.?payment/.test(t)) colMap.net = i + 1
+    }
+    if (found >= 2) break
+  }
+
+  if (headerRowNum < 0 || !colMap.payee) return r
+
+  const rows: PaymentScheduleRow[] = []
+  let globalVat = 0
+  let globalWht = 0
+
+  ws.eachRow((row, rowNum) => {
+    if (rowNum <= headerRowNum) return
+    const payee = cellStr(row.getCell(colMap.payee ?? 1)).trim()
+    if (!payee || payee.length < 2) return
+    if (/^(total|subtotal|prepared|reviewed|approved|signature|authoris)/i.test(payee)) return
+
+    const paymentValue = cellNum(row.getCell(colMap.value ?? 4))
+    if (!paymentValue || paymentValue <= 0) return
+
+    const budgetCodeRaw = cellStr(row.getCell(colMap.budgetCode ?? 3)).trim()
+    const deptCode = matchDept(budgetCodeRaw) ?? matchDept(payee)
+    const dept = DEPARTMENTS.find(d => d.code === deptCode)
+
+    const vatVal = colMap.vat ? (cellNum(row.getCell(colMap.vat)) ?? 0) : 0
+    const whtVal = colMap.wht ? (cellNum(row.getCell(colMap.wht)) ?? 0) : 0
+
+    // Accumulate global rates
+    if (vatVal > 0 && vatVal <= 50) globalVat = vatVal
+    if (whtVal > 0 && whtVal <= 50) globalWht = whtVal
+
+    rows.push({
+      id: uid(),
+      payeeName: payee.slice(0, 80),
+      description: cellStr(row.getCell(colMap.description ?? 2)).trim().slice(0, 100),
+      budgetCode: budgetCodeRaw || deptCode || '',
+      department: dept?.name || deptCode || '',
+      bankName: colMap.bank ? cellStr(row.getCell(colMap.bank)).trim() : '',
+      accountNumber: colMap.account ? cellStr(row.getCell(colMap.account)).trim() : '',
+      paymentValue,
+      vatRate: vatVal <= 1 ? vatVal * 100 : vatVal,
+      whtRate: whtVal <= 1 ? whtVal * 100 : whtVal,
+    })
+  })
+
+  if (rows.length > 0) {
+    r.paymentSchedules!.push({
+      _sheetName: sheetName,
+      id: uid(),
+      scheduleNumber,
+      globalVatRate: globalVat <= 1 ? globalVat * 100 : globalVat,
+      globalWhtRate: globalWht <= 1 ? globalWht * 100 : globalWht,
+      rows,
+      preparedBy: '',
+      reviewedBy: '',
+      approvedBy: '',
+      createdAt: new Date().toISOString(),
+      status: 'draft',
     })
   }
 
-  // ── Infer percentages from amounts if still missing ───────────────────────
-  const base = result.totalBudget ?? subtotalForInference
-  if (base && base > 0) {
-    if (!result.contingencyPercent && contingencyAmount) {
-      result.contingencyPercent = inferPercent(contingencyAmount, base)
+  return r
+}
+
+// ─── Merge results ────────────────────────────────────────────────────────────
+
+const SCALAR_KEYS = [
+  'title', 'company', 'totalBudget', 'currency', 'shootDays', 'startDate',
+  'productionFeePercent', 'contingencyPercent', 'vatRate', 'whtRate',
+  'developmentMonths', 'preProdMonths', 'shootMonths', 'postMonths',
+] as const
+
+function mergeResults(parts: Partial<ParsedWorkbook>[], sheets: SheetClassification[]): ParsedWorkbook {
+  const result: ParsedWorkbook = {
+    title: null, company: null, totalBudget: null, currency: null,
+    shootDays: null, startDate: null, productionFeePercent: null,
+    contingencyPercent: null, vatRate: null, whtRate: null,
+    developmentMonths: null, preProdMonths: null, shootMonths: null, postMonths: null,
+    deptAllocations: {}, deptAllocationsRaw: {},
+    lineItems: {}, salaryRoles: [], paymentSchedules: [], forecastRows: [],
+    conflicts: [], sheets, warnings: [],
+  }
+
+  for (const key of SCALAR_KEYS) {
+    const candidates = parts
+      .map(p => (p as Record<string, unknown>)[key] as ScoredField<unknown> | undefined)
+      .filter(Boolean) as ScoredField<unknown>[]
+    if (!candidates.length) continue
+    const best = candidates.find(c => c.confidence === 'high') ?? candidates[0]
+    ;(result as unknown as Record<string, unknown>)[key] = best
+  }
+
+  for (const part of parts) {
+    // Line items — merge by dept
+    for (const [code, items] of Object.entries(part.lineItems ?? {})) {
+      const k = code as DeptCode
+      if (!result.lineItems[k]) result.lineItems[k] = []
+      result.lineItems[k]!.push(...(items ?? []))
     }
-    if (!result.productionFeePercent && productionFeeAmount) {
-      result.productionFeePercent = inferPercent(productionFeeAmount, base)
+    // Dept allocations (absolute) — prefer high confidence
+    for (const [code, scored] of Object.entries(part.deptAllocations ?? {})) {
+      const k = code as DeptCode
+      const existing = result.deptAllocations[k]
+      if (!existing || (scored!.confidence === 'high' && existing.confidence !== 'high'))
+        result.deptAllocations[k] = scored!
+    }
+    // Dept allocations raw (%)
+    for (const [code, pct] of Object.entries(part.deptAllocationsRaw ?? {})) {
+      const k = code as DeptCode
+      if (!result.deptAllocationsRaw[k]) result.deptAllocationsRaw[k] = pct!
+    }
+    result.salaryRoles.push(...(part.salaryRoles ?? []))
+    result.paymentSchedules.push(...(part.paymentSchedules ?? []))
+    result.forecastRows.push(...(part.forecastRows ?? []))
+    result.warnings.push(...(part.warnings ?? []))
+  }
+
+  return result
+}
+
+// ─── Cross-sheet conflict detection ──────────────────────────────────────────
+
+function detectConflicts(result: ParsedWorkbook): void {
+  const conflicts: ParsedConflict[] = []
+
+  // Salary totals vs dept allocation amounts
+  const salaryByDept: Partial<Record<DeptCode, { total: number; sheet: string }>> = {}
+  for (const role of result.salaryRoles) {
+    const total = Object.values(role.monthlyAmounts).reduce((s, v) => s + v, 0)
+    salaryByDept[role.deptCode] = {
+      total: (salaryByDept[role.deptCode]?.total ?? 0) + total,
+      sheet: 'Salary Forecast',
     }
   }
 
+  for (const [code, scored] of Object.entries(result.deptAllocations) as [DeptCode, ScoredField<number>][]) {
+    const sal = salaryByDept[code]
+    if (!sal || sal.total <= 0 || scored.value <= 0) continue
+    const diff = Math.abs(sal.total - scored.value) / Math.max(sal.total, scored.value)
+    if (diff > 0.08) {
+      const dept = DEPARTMENTS.find(d => d.code === code)
+      conflicts.push({
+        field: `dept_${code}`,
+        label: `${dept?.name ?? code} total`,
+        sources: [
+          { sheet: scored.source, value: scored.value },
+          { sheet: sal.sheet, value: Math.round(sal.total) },
+        ],
+        chosenSource: null,
+      })
+    }
+  }
+
+  result.conflicts = conflicts
+}
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
+
+export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedWorkbook> {
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer)
+
+  const sheets: SheetClassification[] = []
+  const parts: Partial<ParsedWorkbook>[] = []
+  const unclassified: string[] = []
+
+  for (const ws of wb.worksheets) {
+    if (!ws.rowCount || ws.rowCount < 2) continue
+
+    const classification = classifySheet(ws)
+    sheets.push(classification)
+
+    let part: Partial<ParsedWorkbook> = {}
+
+    switch (classification.type) {
+      case 'assumptions':     part = parseAssumptionsSheet(ws, ws.name); break
+      case 'dept-allocations':part = parseAssumptionsSheet(ws, ws.name); break
+      case 'budget-summary':  part = parseBudgetSummarySheet(ws, ws.name); break
+      case 'salary-forecast': part = parseSalaryForecastSheet(ws, ws.name); break
+      case 'production-forecast': part = parseProductionForecastSheet(ws, ws.name); break
+      case 'production-timeline': part = parseProductionTimelineSheet(ws, ws.name); break
+      case 'payment-schedule': part = parsePaymentScheduleSheet(ws, ws.name); break
+      case 'unknown':         unclassified.push(ws.name); break
+    }
+
+    if (Object.keys(part).length > 0) parts.push(part)
+  }
+
+  const result = mergeResults(parts, sheets)
+
+  if (unclassified.length) {
+    result.warnings.push(
+      `${unclassified.length} sheet${unclassified.length > 1 ? 's' : ''} could not be classified and were skipped: ${unclassified.join(', ')}.`
+    )
+  }
+
+  detectConflicts(result)
   return result
 }
