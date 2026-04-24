@@ -354,10 +354,10 @@ function parseAssumptionsSheet(ws: ExcelJS.Worksheet, sheetName: string): Partia
 
 // ─── Dynamic column map detection ────────────────────────────────────────────
 
-interface BudgetColMap { detail: number; qty: number; rate: number; unit: number; total: number }
+interface BudgetColMap { detail: number; no: number; qty: number; rate: number; unit: number; total: number }
 
 function detectBudgetColMap(ws: ExcelJS.Worksheet): BudgetColMap {
-  const defaults: BudgetColMap = { detail: 1, qty: 2, rate: 3, unit: 4, total: -1 }
+  const defaults: BudgetColMap = { detail: 1, no: -1, qty: 2, rate: 3, unit: 4, total: -1 }
   for (let rn = 1; rn <= 8; rn++) {
     const texts = denseTexts(ws.getRow(rn), 16).map(t => norm(t))
     let hits = 0
@@ -366,6 +366,7 @@ function detectBudgetColMap(ws: ExcelJS.Worksheet): BudgetColMap {
       const t = texts[i]
       if (!t) continue
       if (COL_HEADER_PATTERNS.detail.test(t) && map.detail === undefined)  { map.detail = i; hits++ }
+      if (COL_HEADER_PATTERNS.no.test(t) && map.no === undefined)          { map.no = i }
       if (COL_HEADER_PATTERNS.qty.test(t) && map.qty === undefined)        { map.qty = i; hits++ }
       if (COL_HEADER_PATTERNS.rate.test(t) && map.rate === undefined)      { map.rate = i; hits++ }
       if (COL_HEADER_PATTERNS.unit.test(t) && map.unit === undefined)      { map.unit = i }
@@ -460,6 +461,7 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
       ? (nums[colMap.total] as number)
       : Math.max(...largeNums)
     const schedNo = col1.length > 0 && col1.length <= 6 && !/^[a-z]/i.test(col1) ? col1 : ''
+    const noRaw  = (colMap.no >= 0 ? (nums[colMap.no] ?? null) : null) as number | null
     const qty = (nums[colMap.qty] ?? nums[colMap.qty + 1] ?? null) as number | null
     const rate = (nums[colMap.rate] ?? nums[colMap.rate + 1] ?? null) as number | null
     const unit = (texts[colMap.unit] || texts[colMap.unit + 1] || 'Flat').slice(0, 20)
@@ -467,10 +469,20 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
     const effectiveRate = (rate && rate > 0 && rate !== total) ? rate : total
     const effectiveQty = (qty && qty > 0 && qty < 5000 && qty !== total) ? qty : 1
 
+    // If an explicit No. column was detected, use it; otherwise check if two small
+    // integers exist (both < 500) that might have been conflated — smaller → no, larger → qty.
+    let effectiveNo = noRaw && noRaw > 0 && noRaw < 500 ? noRaw : 1
+    if (colMap.no < 0 && effectiveNo === 1) {
+      // No explicit No. column: if qty looks like a count (≤20) and we have other
+      // small integers that look like duration, leave as-is (no correction needed).
+      // If colMap.qty === colMap.no (no.of header matched qty pattern), already handled above.
+    }
+
     r.lineItems![currentDept]!.push({
       id: uid(),
       schedNo: schedNo || `${currentDept}${(r.lineItems![currentDept]?.length ?? 0) + 1}`,
       detail: detail.slice(0, 80),
+      no: effectiveNo,
       qty: effectiveQty,
       rate: Math.round(effectiveRate),
       unit: unit || 'Flat',

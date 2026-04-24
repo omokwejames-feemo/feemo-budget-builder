@@ -72,6 +72,7 @@ function DeptSection({ code }: { code: DeptCode }) {
       id: newId(),
       schedNo,
       detail: '',
+      no: 1,
       qty: 1,
       rate: 0,
       unit: 'Flat',
@@ -104,8 +105,9 @@ function DeptSection({ code }: { code: DeptCode }) {
               <tr>
                 <th style={{ width: 70 }}>SCH.NO.</th>
                 <th>Detail / Description</th>
-                <th style={{ width: 60, textAlign: 'right' }}>QTY</th>
+                <th style={{ width: 50, textAlign: 'right' }}>No.</th>
                 <th style={{ width: 110, textAlign: 'right' }}>Rate ({cur})</th>
+                <th style={{ width: 60, textAlign: 'right' }}>Qty</th>
                 <th style={{ width: 80 }}>Unit</th>
                 <th style={{ width: 40 }}>
                   <span title="I = Internal (in-house/overhead costs absorbed by production company)&#10;E = External (contracted, freelance, or outsourced)" style={{ cursor: 'help', borderBottom: '1px dotted var(--text3)' }}>I/E</span>
@@ -116,7 +118,7 @@ function DeptSection({ code }: { code: DeptCode }) {
             </thead>
             <tbody>
               {items.map(item => {
-                const total = item.qty * item.rate
+                const total = (item.no ?? 1) * item.qty * item.rate
                 return (
                   <tr key={item.id}>
                     <td className="td-mono">
@@ -127,14 +129,20 @@ function DeptSection({ code }: { code: DeptCode }) {
                     </td>
                     <td>
                       <FormattedNumberCell
-                        value={item.qty}
-                        onChange={v => store.updateLineItem(code, item.id, { qty: v })}
+                        value={item.no ?? 1}
+                        onChange={v => store.updateLineItem(code, item.id, { no: v })}
                       />
                     </td>
                     <td>
                       <FormattedNumberCell
                         value={item.rate}
                         onChange={v => store.updateLineItem(code, item.id, { rate: v })}
+                      />
+                    </td>
+                    <td>
+                      <FormattedNumberCell
+                        value={item.qty}
+                        onChange={v => store.updateLineItem(code, item.id, { qty: v })}
                       />
                     </td>
                     <td>
@@ -176,7 +184,7 @@ function DeptSection({ code }: { code: DeptCode }) {
             </tbody>
             <tfoot>
               <tr className="row-subtotal">
-                <td colSpan={6}>TOTAL {dept.name.toUpperCase()}</td>
+                <td colSpan={7}>TOTAL {dept.name.toUpperCase()}</td>
                 <td className="td-num">{fmtCur(actual, cur)}</td>
                 <td />
               </tr>

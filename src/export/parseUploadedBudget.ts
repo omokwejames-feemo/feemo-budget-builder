@@ -113,28 +113,30 @@ export async function parseUploadedBudget(file: File): Promise<ParsedBudget> {
 
       if (!currentDept) return
 
-      // Line items: col1 = sched no (e.g. "G1"), col2 = detail, col4 = rate, col5 = qty, col6 = unit, col7 = total
+      // Line items: col1=sched no, col2=detail, col3=no., col4=qty, col5=rate, col6=unit, col7=i/e, col8=total
       const schedNo = c1.trim()
       const detail = c2.trim()
-      const rate = cellNum(row.getCell(4))
-      const qty = cellNum(row.getCell(5)) || 1
+      const no = cellNum(row.getCell(3)) || 1
+      const qty = cellNum(row.getCell(4)) || 1
+      const rate = cellNum(row.getCell(5))
       const unit = cellStr(row.getCell(6)) || 'Flat'
-      const totalFromSheet = cellNum(row.getCell(7))
-      const iCol = cellNum(row.getCell(8))
-      const ie: 'I' | 'E' = iCol > 0 ? 'I' : 'E'
+      const totalFromSheet = cellNum(row.getCell(8))
+      const ieStr = cellStr(row.getCell(7)).trim().toUpperCase()
+      const ie: 'I' | 'E' = ieStr === 'I' ? 'I' : 'E'
 
       // Skip section headers, totals, empty rows
       if (!detail || /^(TOTAL|DEPT TARGET|SCH\.NO\.|DETAIL|NO\.|RATE|QTY|UNIT)/i.test(detail)) return
       if (!schedNo && !detail) return
 
-      const effectiveRate = rate > 0 ? rate : (qty > 0 ? totalFromSheet / qty : totalFromSheet)
+      const effectiveRate = rate > 0 ? rate : (no * qty > 0 ? totalFromSheet / (no * qty) : totalFromSheet)
 
       if ((effectiveRate > 0 || totalFromSheet > 0) && detail.length > 1) {
         result.lineItems[currentDept]!.push({
           id: uid(),
           schedNo: schedNo || `${currentDept}${(result.lineItems[currentDept]?.length ?? 0) + 1}`,
           detail,
-          qty: qty || 1,
+          no,
+          qty,
           rate: Math.round(effectiveRate),
           unit,
           ie,

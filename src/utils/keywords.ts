@@ -110,6 +110,7 @@ export const DEPT_ALIASES: Partial<Record<DeptCode, string[]>> = {
 
 export const COL_HEADER_PATTERNS = {
   detail:  /detail|description|item|budget.?head|line.?item|particulars/,
+  no:      /^no\.?$|^#$|^count$|^num(?:ber)?$|^nos?\.?$/,
   qty:     /\bqty\b|quantity|no\.?\s*of/,
   rate:    /\brate\b|\bprice\b|unit.?cost|cost.?per/,
   unit:    /\bunit\b|\btype\b|measure/,

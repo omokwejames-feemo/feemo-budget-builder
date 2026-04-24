@@ -320,30 +320,31 @@ export async function generateBudgetXlsx(state: BudgetState): Promise<ArrayBuffe
   // ── 3. PRODUCTION BUDGET ───────────────────────────────────────────────────
   {
     const ws = wb.addWorksheet('PRODUCTION BUDGET')
-    ws.columns = [{ width: 9 }, { width: 38 }, { width: 8 }, { width: 14 }, { width: 10 }, { width: 5 }, { width: 14 }]
+    ws.columns = [{ width: 9 }, { width: 36 }, { width: 7 }, { width: 7 }, { width: 14 }, { width: 10 }, { width: 5 }, { width: 14 }]
     let r = 1
-    setTitleRow(ws, r, 7,
+    setTitleRow(ws, r, 8,
       `PRODUCTION BUDGET — ${project.title || 'PRODUCTION'}`,
       `Total Budget: ${cur}${project.totalBudget.toLocaleString()} | Currency: ${cur}`)
     r += 3
 
     setColHdr(ws, r, 1, 'SCH NO.', 'center')
     setColHdr(ws, r, 2, 'DETAIL / DESCRIPTION', 'left')
-    setColHdr(ws, r, 3, 'QTY', 'center')
-    setColHdr(ws, r, 4, `RATE (${cur})`)
-    setColHdr(ws, r, 5, 'UNIT', 'center')
-    setColHdr(ws, r, 6, 'I/E', 'center')
-    setColHdr(ws, r, 7, `TOTAL (${cur})`)
+    setColHdr(ws, r, 3, 'NO.', 'center')
+    setColHdr(ws, r, 4, 'QTY', 'center')
+    setColHdr(ws, r, 5, `RATE (${cur})`)
+    setColHdr(ws, r, 6, 'UNIT', 'center')
+    setColHdr(ws, r, 7, 'I/E', 'center')
+    setColHdr(ws, r, 8, `TOTAL (${cur})`)
     ws.getRow(r).height = 18; r++
 
     for (const dept of DEPARTMENTS) {
       const items = lineItems[dept.code] || []
       const target = getDeptTarget(dept.code, state)
-      setSectionHdr(ws, r, 7, `${dept.code}. ${dept.name.toUpperCase()}  |  Target: ${cur}${Math.round(target).toLocaleString()}`)
+      setSectionHdr(ws, r, 8, `${dept.code}. ${dept.name.toUpperCase()}  |  Target: ${cur}${Math.round(target).toLocaleString()}`)
       r++
 
       if (items.length === 0) {
-        ws.mergeCells(r, 1, r, 7)
+        ws.mergeCells(r, 1, r, 8)
         const cell = g(ws, r, 1)
         cell.value = 'No line items entered'
         cell.font = { name: FONT, italic: true, size: 9, color: { argb: C.muted } }
@@ -356,23 +357,26 @@ export async function generateBudgetXlsx(state: BudgetState): Promise<ArrayBuffe
           const bg = i % 2 === 0 ? C.white : C.offWhite
           setData(ws, r, 1, item.schedNo, { align: 'center', color: C.muted, size: 9, bg })
           setData(ws, r, 2, item.detail, { bg })
-          const qty = g(ws, r, 3); qty.value = item.qty; qty.numFmt = '#,##0'; qty.border = bAll()
+          const no = g(ws, r, 3); no.value = item.no ?? 1; no.numFmt = '#,##0'; no.border = bAll()
+          no.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
+          no.alignment = { horizontal: 'right', vertical: 'middle' }; no.font = { name: FONT, size: 10 }
+          const qty = g(ws, r, 4); qty.value = item.qty; qty.numFmt = '#,##0'; qty.border = bAll()
           qty.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
           qty.alignment = { horizontal: 'right', vertical: 'middle' }; qty.font = { name: FONT, size: 10 }
-          const rate = g(ws, r, 4); rate.value = item.rate; rate.numFmt = NUM; rate.border = bAll()
+          const rate = g(ws, r, 5); rate.value = item.rate; rate.numFmt = NUM; rate.border = bAll()
           rate.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
           rate.alignment = { horizontal: 'right', vertical: 'middle' }
           rate.font = { name: FONT, size: 10, color: { argb: C.blue } }
-          setData(ws, r, 5, item.unit, { align: 'center', color: C.muted, size: 9, bg })
-          setData(ws, r, 6, item.ie, { align: 'center', bold: true, bg,
+          setData(ws, r, 6, item.unit, { align: 'center', color: C.muted, size: 9, bg })
+          setData(ws, r, 7, item.ie, { align: 'center', bold: true, bg,
             color: item.ie === 'I' ? C.blue : C.green })
-          const tot = g(ws, r, 7); tot.value = { formula: `C${r}*D${r}` }; tot.numFmt = NUM; tot.border = bAll()
+          const tot = g(ws, r, 8); tot.value = { formula: `C${r}*D${r}*E${r}` }; tot.numFmt = NUM; tot.border = bAll()
           tot.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } }
           tot.alignment = { horizontal: 'right', vertical: 'middle' }; tot.font = { name: FONT, size: 10, bold: true }
           ws.getRow(r).height = 17; r++
         }
-        setSubtotal(ws, r, 7, `TOTAL — ${dept.name.toUpperCase()}`, [
-          { col: 7, formula: `SUM(G${itemStartR}:G${r - 1})` }
+        setSubtotal(ws, r, 8, `TOTAL — ${dept.name.toUpperCase()}`, [
+          { col: 8, formula: `SUM(H${itemStartR}:H${r - 1})` }
         ])
         r++
       }
@@ -383,11 +387,11 @@ export async function generateBudgetXlsx(state: BudgetState): Promise<ArrayBuffe
     const feeAmt = (feePct / 100) * project.totalBudget
     const subTotal = grandActual - getDeptActual('II', state)
     r++
-    setSubtotal(ws, r, 7, `BELOW-THE-LINE SUB-TOTAL (excl. Contingency/Fee)`, [{ col: 7, value: subTotal }]); r++
-    setSubtotal(ws, r, 7, `+ PRODUCTION FEE / CONTINGENCY (II) — ${feePct}%`, [{ col: 7, value: feeAmt }])
-    for (let c = 1; c <= 7; c++) g(ws, r, c).font = { name: FONT, bold: true, size: 10, color: { argb: 'FFC49A2A' } }
+    setSubtotal(ws, r, 8, `BELOW-THE-LINE SUB-TOTAL (excl. Contingency/Fee)`, [{ col: 8, value: subTotal }]); r++
+    setSubtotal(ws, r, 8, `+ PRODUCTION FEE / CONTINGENCY (II) — ${feePct}%`, [{ col: 8, value: feeAmt }])
+    for (let c = 1; c <= 8; c++) g(ws, r, c).font = { name: FONT, bold: true, size: 10, color: { argb: 'FFC49A2A' } }
     r++
-    setGrandTotal(ws, r, 7, `GRAND TOTAL — ALL DEPARTMENTS (${cur})`, [{ col: 7, value: grandActual }])
+    setGrandTotal(ws, r, 8, `GRAND TOTAL — ALL DEPARTMENTS (${cur})`, [{ col: 8, value: subTotal + feeAmt }])
 
     ws.views = [{ state: 'frozen', ySplit: 4 }]
   }
@@ -619,12 +623,12 @@ export async function generateBudgetXlsx(state: BudgetState): Promise<ArrayBuffe
 
     for (const dept of DEPARTMENTS) {
       const code = dept.code as DeptCode
-      const target = getDeptTarget(code, state)
-      if (target <= 0) continue
+      const actual = getDeptActual(code, state)
+      if (actual <= 0) continue
       const deptSalaryRoles = salaryRoles.filter(rl => rl.deptCode === code)
       const salaryByMonth = months.map(m => deptSalaryRoles.reduce((sum, rl) => sum + (rl.monthlyAmounts[m] || 0), 0))
       const totalSalary = salaryByMonth.reduce((s, v) => s + v, 0)
-      const nonSalary = Math.max(0, target - totalSalary)
+      const nonSalary = Math.max(0, actual - totalSalary)
       const activePhases = DEPT_PHASES[code] ?? ['DEV', 'PRE-PROD', 'SHOOT', 'POST']
       const activeMonths = months.filter(m => activePhases.includes(getMonthPhase(m, timeline)))
       const nonSalaryPerMonth = activeMonths.length > 0 ? nonSalary / activeMonths.length : 0

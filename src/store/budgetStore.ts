@@ -115,7 +115,8 @@ export interface LineItem {
   id: string
   schedNo: string
   detail: string
-  qty: number
+  no: number   // count of people/items (e.g. 2 Production Managers)
+  qty: number  // duration/multiplier (e.g. 3 months)
   rate: number
   unit: string
   ie: 'I' | 'E'
@@ -382,7 +383,7 @@ export function getDeptTarget(code: DeptCode, store: Pick<BudgetState, 'project'
 }
 
 export function getDeptActual(code: DeptCode, store: Pick<BudgetState, 'lineItems'>): number {
-  return (store.lineItems[code] || []).reduce((sum, item) => sum + item.qty * item.rate, 0)
+  return (store.lineItems[code] || []).reduce((sum, item) => sum + (item.no ?? 1) * item.qty * item.rate, 0)
 }
 
 export function isSeriesFormat(format: string) {

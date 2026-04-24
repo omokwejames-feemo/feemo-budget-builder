@@ -3,6 +3,7 @@ import type { DeptCode, SalaryRole } from '../store/budgetStore'
 export interface TplLineItem {
   schedNo: string
   detail: string
+  no?: number  // count of people/items; defaults to 1
   qty: number
   unit: string
   ie: 'I' | 'E'

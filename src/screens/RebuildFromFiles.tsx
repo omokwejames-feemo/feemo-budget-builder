@@ -21,9 +21,10 @@ async function parseAssumptionsSheet(ws: ExcelJS.Worksheet): Promise<Record<stri
   return result
 }
 
-type BudgetLineRaw = { schedNo: string; detail: string; qty: number; rate: number; unit: string; ie: 'I' | 'E' }
+type BudgetLineRaw = { schedNo: string; detail: string; no: number; qty: number; rate: number; unit: string; ie: 'I' | 'E' }
 
 // Parse PRODUCTION BUDGET sheet for line items
+// Column layout: 1=sched no, 2=detail, 3=no., 4=qty, 5=rate, 6=unit, 7=i/e, 8=total
 async function parseBudgetSheet(ws: ExcelJS.Worksheet): Promise<Record<string, BudgetLineRaw[]>> {
   const result: Record<string, BudgetLineRaw[]> = {}
   let currentCode = ''
@@ -34,17 +35,19 @@ async function parseBudgetSheet(ws: ExcelJS.Worksheet): Promise<Record<string, B
     const deptMatch = DEPARTMENTS.find(d => d.code === c1 && !c2)
     if (deptMatch) { currentCode = deptMatch.code; return }
     if (!currentCode) return
-    const qty = Number(row.getCell(3).value) || 0
-    const rate = Number(row.getCell(4).value) || 0
+    const no = Number(row.getCell(3).value) || 1
+    const qty = Number(row.getCell(4).value) || 0
+    const rate = Number(row.getCell(5).value) || 0
     if (!c2 || (!qty && !rate)) return
     if (!result[currentCode]) result[currentCode] = []
     result[currentCode].push({
       schedNo: c1 || '',
       detail: c2,
+      no: no || 1,
       qty: qty || 1,
       rate: rate || 0,
-      unit: String(row.getCell(5).value ?? 'flat'),
-      ie: (String(row.getCell(6).value ?? 'E').toUpperCase() === 'I' ? 'I' : 'E') as 'I' | 'E',
+      unit: String(row.getCell(6).value ?? 'flat'),
+      ie: (String(row.getCell(7).value ?? 'E').toUpperCase() === 'I' ? 'I' : 'E') as 'I' | 'E',
     })
   })
   return result
