@@ -66,11 +66,11 @@ export default function App() {
       if (!result.success || !result.data) return
       try {
         const parsed = JSON.parse(result.data)
+        isFirstMount.current = true  // suppress unsaved-changes flag on initial load
         store.loadState(parsed)
         setCurrentFilePath(filePath)
         addRecent(filePath)
         setHasUnsavedChanges(false)
-        isFirstMount.current = true
         setScreen('assumptions')
         setAccessGranted(true)
         setAppView('app')
@@ -148,19 +148,19 @@ export default function App() {
   }
 
   function handleNewProject() {
+    isFirstMount.current = true  // must come BEFORE resetStore so the sub doesn't flag unsaved changes
     store.resetStore()
     setCurrentFilePath(null)
     setHasUnsavedChanges(false)
-    isFirstMount.current = true
     setScreen('assumptions')
     setAppView('app')
   }
 
   function doFreshStart() {
+    isFirstMount.current = true  // must come BEFORE resetStore so the sub doesn't flag unsaved changes
     store.resetStore()
     setCurrentFilePath(null)
     setHasUnsavedChanges(false)
-    isFirstMount.current = true
     setScreen('assumptions')
     setAppView('app')
     setShowFreshStartConfirm(false)
@@ -177,11 +177,11 @@ export default function App() {
     if (!result.success || !result.data || !result.filePath) return
     try {
       const parsed = JSON.parse(result.data)
+      isFirstMount.current = true  // suppress unsaved-changes flag on initial load
       store.loadState(parsed)
       setCurrentFilePath(result.filePath)
       addRecent(result.filePath)
       setHasUnsavedChanges(false)
-      isFirstMount.current = true
       setScreen('assumptions')
       setAppView('app')
     } catch {
@@ -200,11 +200,11 @@ export default function App() {
     }
     try {
       const parsed = JSON.parse(result.data)
+      isFirstMount.current = true  // suppress unsaved-changes flag on initial load
       store.loadState(parsed)
       setCurrentFilePath(filePath)
       addRecent(filePath)
       setHasUnsavedChanges(false)
-      isFirstMount.current = true
       setScreen('assumptions')
       setAppView('app')
     } catch {
