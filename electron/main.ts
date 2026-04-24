@@ -516,6 +516,22 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null })
 
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[feemo] Renderer crashed:', details.reason, 'exit:', details.exitCode)
+  })
+
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    // In dev mode, retry after a short delay if the Vite server wasn't ready yet
+    if (process.env.VITE_DEV_SERVER_URL && code !== 0) {
+      console.warn(`[feemo] Failed to load dev server (${code}: ${desc}) — retrying in 1s…`)
+      setTimeout(() => {
+        mainWindow?.loadURL(process.env.VITE_DEV_SERVER_URL!)
+      }, 1000)
+    } else {
+      console.error('[feemo] Failed to load:', code, desc, url)
+    }
+  })
+
   // Once the renderer is ready, send any queued file path
   mainWindow.webContents.on('did-finish-load', () => {
     const filePath = startupFilePath ?? getArgvFilePath()
