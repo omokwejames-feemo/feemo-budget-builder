@@ -49,7 +49,7 @@ export function applyFullTemplate(
       state.setDeptAllocation('II', parseFloat(feePercent.toFixed(2)))
     } else {
       const rawPct = (deptPcts[code] ?? 0) * scale
-      state.setDeptAllocation(code, parseFloat(rawPct.toFixed(4)))
+      state.setDeptAllocation(code, parseFloat(rawPct.toFixed(2)))
     }
   })
 

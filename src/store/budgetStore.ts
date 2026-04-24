@@ -279,7 +279,7 @@ export const useBudgetStore = create<BudgetState>()(
       setTimeline: (t) => set(s => ({ timeline: { ...s.timeline, ...t } })),
       setInstallments: (inst) => set({ installments: inst }),
       setDeptAllocation: (code, pct) =>
-        set(s => ({ deptAllocations: { ...s.deptAllocations, [code]: pct } })),
+        set(s => ({ deptAllocations: { ...s.deptAllocations, [code]: Math.round(pct * 100) / 100 } })),
       setLineItems: (code, items) =>
         set(s => ({ lineItems: { ...s.lineItems, [code]: items } })),
       addLineItem: (code, item) =>

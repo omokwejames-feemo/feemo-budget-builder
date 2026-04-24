@@ -353,7 +353,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
                       const targetSum = 100 - newFee
                       const scale = targetSum / nonIISum
                       DEPARTMENTS.filter(d => d.code !== 'II').forEach(d => {
-                        const scaled = parseFloat(((deptAllocations[d.code as DeptCode] || 0) * scale).toFixed(4))
+                        const scaled = Math.round((deptAllocations[d.code as DeptCode] || 0) * scale * 100) / 100
                         setDeptAllocation(d.code as DeptCode, scaled)
                       })
                     }
@@ -675,7 +675,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
                       step="0.1"
                       min="0"
                       max="100"
-                      value={pct || ''}
+                      value={pct > 0 ? parseFloat(pct.toFixed(2)) : ''}
                       onChange={e => setDeptAllocation(dept.code as DeptCode, Number(e.target.value))}
                       placeholder="0"
                     />
