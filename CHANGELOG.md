@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.7.1 — Fix Batch 10: Atomic Upload, Salary Merge, Pre-Pop Summary, Audit Log (2026-04-24)
+
+- **Atomic budget population**: Uploading a workbook no longer triggers the "Budget Exceeded" dialog mid-import. A suppression flag (`isPopulatingFromUpload`) is raised before writing any data and cleared after all fields are committed. `totalBudget` is written first so every subsequent line-item comparison has the correct target.
+- **Salary forecast merge**: Parsed salary roles are now matched against existing grid rows by fuzzy name + department code. Matched rows have their monthly amounts updated; unmatched rows are appended. Re-uploading into a project with existing salary data no longer creates duplicates.
+- **Pre-population summary panel**: Before clicking "Load into Project" the confirmation screen now shows a compact preview card — detected document type, total budget, line item / salary / dept allocation / payment schedule counts, green-badged fields that will be set, and grey-badged fields not detected in the workbook.
+- **Overwrite warning modal**: If the project already contains data (existing line items, salary roles, or assumption fields), a destructive-action dialog appears listing what would be lost before the import proceeds. The user must explicitly confirm before data is replaced. Salary roles are always merged, never replaced outright.
+- **Upload audit log**: After every successful upload the Production Budget screen shows a collapsible "Upload Summary" panel — file name, upload timestamp, document type, cross-check note, stats row, and a full field-by-field populated/missing breakdown. Dismissing the panel clears it from state.
+- **Soft cross-check**: If the sum of imported line items differs from the stated total budget by more than 1%, an informational amber note appears (not a blocking error) explaining the delta and suggesting where to correct it.
+
 ## v1.7.0 — Fix Batch 9: Smart Budget Reading, Population Engine, Budget Wizard, File Management (2026-04-24)
 
 - **Budget type auto-detection**: Workbooks are now classified into one of five types — Full Production Budget, Production Forecast, Salary Forecast, Departmental Summary, or Mixed — before any population attempt. A banner at the top of the confirmation screen shows the detected type and lets you override it.
