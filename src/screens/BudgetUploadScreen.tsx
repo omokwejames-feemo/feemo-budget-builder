@@ -220,6 +220,15 @@ function mergeSalaryRoles(
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Fallback sheet selector state ───────────────────────────────────────────
+
+interface PendingFallback {
+  needsSalary:   boolean
+  needsForecast: boolean
+  sheetNames:    string[]
+  step:          'salary' | 'forecast'
+}
+
 export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const store = useBudgetStore()
   const [stage, setStage] = useState<'parsing' | 'error' | 'confirm'>('parsing')
@@ -234,6 +243,10 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const [wizardExtras, setWizardExtras] = useState<WizardExtras | null>(null)
   const [uploadedFileName, setUploadedFileName] = useState('')
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false)
+  const [pendingFallback, setPendingFallback] = useState<PendingFallback | null>(null)
+  const [fallbackSheet, setFallbackSheet] = useState('')
+  const [fallbackParsing, setFallbackParsing] = useState(false)
+  const [fallbackError, setFallbackError] = useState('')
 
   useEffect(() => { handleUpload() }, [])
 
@@ -392,6 +405,37 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 7b — Wizard key roles → salary forecast rows (if salary not already parsed)
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (wizardExtras && wizardExtras.keyRoles.length > 0 && pw.salaryRoles.length === 0) {
+      const deptCodeForRole = (role: string): import('../store/budgetStore').DeptCode => {
+        const r = role.toLowerCase()
+        if (r.includes('director') || r.includes('dop') || r.includes('dp')) return 'D'
+        if (r.includes('producer') || r.includes('line producer')) return 'C'
+        if (r.includes('editor') || r.includes('post') || r.includes('vfx')) return 'FF'
+        if (r.includes('sound')) return 'H'
+        if (r.includes('gaffer') || r.includes('lighting') || r.includes('electric')) return 'I'
+        if (r.includes('art') || r.includes('production designer')) return 'J'
+        if (r.includes('costume') || r.includes('wardrobe') || r.includes('stylist')) return 'M'
+        if (r.includes('makeup') || r.includes('hair')) return 'N'
+        return 'F'
+      }
+      const newRoles: import('../store/budgetStore').SalaryRole[] = wizardExtras.keyRoles
+        .filter(kr => kr.role.trim() && kr.rate > 0)
+        .map((kr, i) => ({
+          id: `wiz_role_${i}`,
+          schedNo: 'WIZ',
+          role: kr.role,
+          deptCode: deptCodeForRole(kr.role),
+          phase: 'all' as const,
+          monthlyAmounts: {},
+        }))
+      if (newRoles.length > 0) {
+        store.setSalaryRoles(mergeSalaryRoles(newRoles, store.salaryRoles))
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // STEP 8 — Wizard installments
     // ─────────────────────────────────────────────────────────────────────────────
     if (wizardExtras && wizardExtras.installments.length > 0) {
@@ -483,7 +527,221 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
       crossCheckMessage,
     })
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 13 — Emit persistent notices for rounding variance and low-confidence fields
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (crossCheckMessage) {
+      store.addNotice({ type: 'rounding', message: crossCheckMessage, targetScreen: 'assumptions' })
+    }
+
+    // Low-confidence fields notice
+    const lowConf = auditFields.filter(f => !f.populated)
+    if (lowConf.length > 0) {
+      store.addNotice({
+        type: 'confidence',
+        message: `${lowConf.length} field(s) could not be auto-detected from "${uploadedFileName || 'your file'}": ${lowConf.map(f => f.field).join(', ')}. Review in Assumptions.`,
+        targetScreen: 'assumptions',
+      })
+    }
+
+    // Check salary and forecast population and trigger fallback if needed
+    const salaryPopulated  = pw.salaryRoles.length > 0
+    const forecastPopulated = pw.forecastRows.some(r => Object.values(r.monthlyValues).some(v => v > 0))
+    const sheetNames = pw.sheets.map(s => s.name)
+
+    if (!salaryPopulated || !forecastPopulated) {
+      setPendingFallback({
+        needsSalary:   !salaryPopulated,
+        needsForecast: !forecastPopulated,
+        sheetNames,
+        step: !salaryPopulated ? 'salary' : 'forecast',
+      })
+      // Don't call onDone yet — wait for fallback resolution
+      return
+    }
+
     onDone()
+  }
+
+  // ─── Fallback: re-parse a user-selected sheet for salary or forecast ──────────
+
+  async function handleFallbackSubmit() {
+    if (!pw || !fallbackSheet || !pendingFallback) return
+    setFallbackParsing(true)
+    setFallbackError('')
+
+    try {
+      // Find the sheet by name in the already-parsed workbook
+      const sheet = pw.sheets.find(s => s.name === fallbackSheet)
+      if (!sheet) {
+        setFallbackError('Sheet not found. Please select again.')
+        setFallbackParsing(false)
+        return
+      }
+
+      const { parseSingleSheet } = await import('../utils/budgetParser')
+      const result = await parseSingleSheet(pw._rawBuffer!, fallbackSheet)
+
+      if (pendingFallback.step === 'salary') {
+        if (result.salaryRoles.length === 0) {
+          setFallbackError(
+            'This sheet could not be reliably parsed as a salary forecast. ' +
+            'You can enter salary data manually on the Salary Forecast page, or skip this step.'
+          )
+          setFallbackParsing(false)
+          return
+        }
+        store.setSalaryRoles(mergeSalaryRoles(result.salaryRoles, store.salaryRoles))
+        store.addNotice({
+          type: 'info',
+          message: `Salary forecast populated from sheet "${fallbackSheet}" (${result.salaryRoles.length} roles).`,
+          targetScreen: 'salary',
+        })
+
+        // Now check forecast
+        if (pendingFallback.needsForecast) {
+          setPendingFallback(prev => prev ? { ...prev, step: 'forecast' } : null)
+          setFallbackSheet('')
+          setFallbackParsing(false)
+          return
+        }
+      } else {
+        // forecast step
+        const hasForecasts = result.forecastRows.some(r => Object.values(r.monthlyValues).some(v => v > 0))
+        if (!hasForecasts) {
+          setFallbackError(
+            'This sheet could not be reliably parsed as a production forecast. ' +
+            'You can enter forecast data manually on the Production Forecast page, or skip.'
+          )
+          setFallbackParsing(false)
+          return
+        }
+        for (const row of result.forecastRows) {
+          if (!row.deptCode) continue
+          for (const [month, value] of Object.entries(row.monthlyValues)) {
+            if (value > 0) store.setForecastOverride(`${row.deptCode}_${month}`, value)
+          }
+        }
+        store.addNotice({
+          type: 'info',
+          message: `Production forecast populated from sheet "${fallbackSheet}".`,
+          targetScreen: 'forecast',
+        })
+      }
+
+      setPendingFallback(null)
+      onDone()
+    } catch {
+      setFallbackError('An error occurred while parsing the selected sheet.')
+      setFallbackParsing(false)
+    }
+  }
+
+  function handleFallbackSkip() {
+    if (!pendingFallback) return
+    if (pendingFallback.step === 'salary' && pendingFallback.needsForecast) {
+      store.addNotice({
+        type: 'info',
+        message: 'Salary forecast was not populated — complete it manually on the Salary Forecast page.',
+        targetScreen: 'salary',
+      })
+      setPendingFallback(prev => prev ? { ...prev, step: 'forecast' } : null)
+      setFallbackSheet('')
+      setFallbackError('')
+      return
+    }
+    if (pendingFallback.step === 'forecast') {
+      store.addNotice({
+        type: 'info',
+        message: 'Production forecast was not populated — complete it manually on the Production Forecast page.',
+        targetScreen: 'forecast',
+      })
+    }
+    setPendingFallback(null)
+    onDone()
+  }
+
+  // ─── Fallback sheet selector dialog ──────────────────────────────────────────
+
+  if (pendingFallback) {
+    const isSalary = pendingFallback.step === 'salary'
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 32 }}>
+        <div style={{
+          background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 14,
+          padding: '36px 40px', maxWidth: 540, width: '100%',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{ fontSize: 36, marginBottom: 16, textAlign: 'center' }}>{isSalary ? '👥' : '📈'}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
+            {isSalary ? 'Salary Forecast Not Detected' : 'Production Forecast Not Detected'}
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.7, marginBottom: 20 }}>
+            {isSalary
+              ? 'The salary forecast could not be automatically populated from your budget file. Your Excel workbook may have a separate sheet for crew salaries. Please identify which sheet contains your salary data.'
+              : 'A production forecast (cashflow schedule) was not detected in your file. If your workbook has a forecast or cashflow sheet, please identify it here.'}
+          </p>
+
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+              Select sheet
+            </div>
+            <select
+              value={fallbackSheet}
+              onChange={e => { setFallbackSheet(e.target.value); setFallbackError('') }}
+              style={{
+                width: '100%', padding: '10px 12px',
+                background: 'var(--bg3)', border: '1px solid var(--border)',
+                borderRadius: 7, color: 'var(--text)', fontSize: 13,
+                outline: 'none', fontFamily: 'inherit',
+              }}
+            >
+              <option value="">— Choose a sheet —</option>
+              {pendingFallback.sheetNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+
+          {fallbackError && (
+            <div style={{
+              padding: '10px 14px', background: 'rgba(255,100,100,0.08)',
+              border: '1px solid rgba(255,100,100,0.3)', borderRadius: 7,
+              fontSize: 12, color: '#ff6b6b', lineHeight: 1.6, marginBottom: 14,
+            }}>
+              {fallbackError}
+              {fallbackError.includes('could not be reliably') && (
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => { setPendingFallback(null); onDone() }}
+                    style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text3)', fontSize: 11, cursor: 'pointer' }}
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button
+              onClick={handleFallbackSkip}
+              style={S.btnGhost}
+              disabled={fallbackParsing}
+            >
+              Skip
+            </button>
+            <button
+              onClick={handleFallbackSubmit}
+              style={{ ...S.btnPrimary, opacity: (!fallbackSheet || fallbackParsing) ? 0.5 : 1 }}
+              disabled={!fallbackSheet || fallbackParsing}
+            >
+              {fallbackParsing ? 'Parsing…' : 'Use this sheet →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // ─── Stage: parsing ──────────────────────────────────────────────────────────

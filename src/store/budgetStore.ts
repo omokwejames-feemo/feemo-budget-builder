@@ -130,6 +130,17 @@ export interface SalaryRole {
   monthlyAmounts: Record<number, number>
 }
 
+// ─── App notices (persisted with project) ────────────────────────────────────
+
+export interface AppNotice {
+  id: string
+  message: string
+  timestamp: string
+  type: 'rounding' | 'conflict' | 'confidence' | 'wizard' | 'info'
+  targetScreen?: string   // nav screen to jump to via "Go to" button
+  dismissed: boolean
+}
+
 // ─── Upload audit (session-only, not persisted) ───────────────────────────────
 
 export interface UploadAuditField {
@@ -162,6 +173,7 @@ export interface BudgetState {
   paymentSchedules: PaymentSchedule[]
   expenditureDeductions: ExpenditureDeduction[]
   lastDriveSave: string | null // ISO timestamp
+  notices: AppNotice[]          // persisted with project file
 
   // ── Session-only (not persisted) ──────────────────────────────────────────
   isPopulatingFromUpload: boolean   // suppresses validation during bulk import
@@ -190,11 +202,14 @@ export interface BudgetState {
   setLastDriveSave: (ts: string) => void
   setIsPopulatingFromUpload: (v: boolean) => void
   setLastUploadAudit: (audit: UploadAudit | null) => void
+  addNotice: (notice: Omit<AppNotice, 'id' | 'timestamp' | 'dismissed'>) => void
+  dismissNotice: (id: string) => void
+  clearAllNotices: () => void
   resetStore: () => void
   resetTimeline: () => void
   resetInstallments: () => void
   resetDeptAllocations: () => void
-  loadState: (state: Partial<Pick<BudgetState, 'project' | 'timeline' | 'installments' | 'deptAllocations' | 'lineItems' | 'salaryRoles' | 'forecastOverrides' | 'companyProfile' | 'paymentSchedules' | 'expenditureDeductions'>>) => void
+  loadState: (state: Partial<Pick<BudgetState, 'project' | 'timeline' | 'installments' | 'deptAllocations' | 'lineItems' | 'salaryRoles' | 'forecastOverrides' | 'companyProfile' | 'paymentSchedules' | 'expenditureDeductions' | 'notices'>>) => void
 }
 
 const defaultProject: ProjectDetails = {
@@ -248,6 +263,7 @@ const initialState = {
   paymentSchedules: [] as PaymentSchedule[],
   expenditureDeductions: [] as ExpenditureDeduction[],
   lastDriveSave: null as string | null,
+  notices: [] as AppNotice[],
   // Session-only (always reset on app start / resetStore)
   isPopulatingFromUpload: false,
   lastUploadAudit: null as UploadAudit | null,
@@ -303,6 +319,18 @@ export const useBudgetStore = create<BudgetState>()(
       setLastDriveSave: (ts) => set({ lastDriveSave: ts }),
       setIsPopulatingFromUpload: (v) => set({ isPopulatingFromUpload: v }),
       setLastUploadAudit: (audit) => set({ lastUploadAudit: audit }),
+      addNotice: (notice) => set(s => ({
+        notices: [...s.notices, {
+          ...notice,
+          id: `notice_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          timestamp: new Date().toISOString(),
+          dismissed: false,
+        }],
+      })),
+      dismissNotice: (id) => set(s => ({
+        notices: s.notices.map(n => n.id === id ? { ...n, dismissed: true } : n),
+      })),
+      clearAllNotices: () => set({ notices: [] }),
       resetStore: () => set(initialState),
       resetTimeline: () => set({ timeline: defaultTimeline }),
       resetInstallments: () => set({ installments: [] }),
@@ -323,6 +351,7 @@ export const useBudgetStore = create<BudgetState>()(
         paymentSchedules: s.paymentSchedules,
         expenditureDeductions: s.expenditureDeductions,
         lastDriveSave: s.lastDriveSave,
+        notices: s.notices,
         // isPopulatingFromUpload and lastUploadAudit are intentionally excluded
       }),
     }

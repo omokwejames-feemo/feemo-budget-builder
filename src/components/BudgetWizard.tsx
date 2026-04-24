@@ -7,6 +7,7 @@ import { useState } from 'react'
 import type { ParsedWorkbook } from '../utils/budgetParser'
 import { DEPARTMENTS } from '../store/budgetStore'
 import type { DeptCode } from '../store/budgetStore'
+import DatePicker from './DatePicker'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,12 @@ export interface EditState {
   deptPct: Partial<Record<DeptCode, string>>
 }
 
+export interface KeyRoleRate {
+  role: string
+  rate: number
+  unit: 'daily' | 'weekly' | 'fixed'
+}
+
 export interface WizardExtras {
   format: string
   episodes: number
@@ -26,11 +33,8 @@ export interface WizardExtras {
   shootDays: number
   shootDaysPerWeek: number
   installments: Array<{ pct: number; month: number }>
-  directorRate: number
-  producerRate: number
-  rateType: 'daily' | 'weekly'
-  standardCrewRate: number
-  crewCount: number
+  keyRoles: KeyRoleRate[]
+  totalSalaryBudget: number
 }
 
 interface Props {
@@ -120,12 +124,41 @@ const TOTAL_STAGES = 6
 export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, onCancel }: Props) {
   const [stage, setStage] = useState(1)
   const [edit, setEdit] = useState<EditState>({ ...initialEdit })
+  // Pre-populate key roles from detected salary roles in the parsed workbook
+  const defaultKeyRoles: KeyRoleRate[] = [
+    { role: 'Director',           rate: 0, unit: 'weekly' },
+    { role: 'Producer',           rate: 0, unit: 'weekly' },
+    { role: 'Line Producer',      rate: 0, unit: 'weekly' },
+    { role: 'DOP',                rate: 0, unit: 'weekly' },
+    { role: 'Production Designer',rate: 0, unit: 'weekly' },
+    { role: 'Editor',             rate: 0, unit: 'weekly' },
+    { role: 'Sound Designer',     rate: 0, unit: 'weekly' },
+    { role: 'Costume Designer',   rate: 0, unit: 'weekly' },
+    { role: 'Gaffer',             rate: 0, unit: 'weekly' },
+  ]
+
+  // Merge any roles detected from the upload into the default list
+  const uploadedRoles: KeyRoleRate[] = parsedWorkbook.salaryRoles.map(r => ({
+    role: r.role,
+    rate: Math.max(...Object.values(r.monthlyAmounts)),
+    unit: 'weekly' as const,
+  }))
+  const mergedDefaultRoles: KeyRoleRate[] = [...defaultKeyRoles]
+  for (const ur of uploadedRoles) {
+    const idx = mergedDefaultRoles.findIndex(r => r.role.toLowerCase() === ur.role.toLowerCase())
+    if (idx >= 0) {
+      if (ur.rate > 0) mergedDefaultRoles[idx] = { ...mergedDefaultRoles[idx], rate: ur.rate }
+    } else {
+      mergedDefaultRoles.push(ur)
+    }
+  }
+
   const [extras, setExtras] = useState<WizardExtras>({
     format: 'Feature Film', episodes: 0, episodeDuration: 45,
     location: '', shootDays: 0, shootDaysPerWeek: 5,
     installments: [{ pct: 50, month: 1 }, { pct: 50, month: 3 }],
-    directorRate: 0, producerRate: 0, rateType: 'weekly',
-    standardCrewRate: 0, crewCount: 0,
+    keyRoles: mergedDefaultRoles,
+    totalSalaryBudget: 0,
   })
   const [showSummary, setShowSummary] = useState(false)
 
@@ -337,8 +370,15 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
         />
         <Input label="Shooting Days per Week" value={String(extras.shootDaysPerWeek)} onChange={v => upExtras('shootDaysPerWeek', parseInt(v) || 5)} type="number" placeholder="e.g. 5" />
         <Input label="Base City / Primary Location" value={extras.location} onChange={v => upExtras('location', v)} placeholder="e.g. Lagos" />
-        <Input label={`Start Date${alreadyHas.startDate ? ' ✓' : ''}`} value={edit.startDate} onChange={v => upEdit('startDate', v)} placeholder="YYYY-MM-DD" />
+        {/* blank cell in the 2-col grid to keep alignment */}
+        <div />
       </Grid>
+      <DatePicker
+        label={`Production Start Date${alreadyHas.startDate ? ' ✓' : ''}`}
+        value={edit.startDate}
+        onChange={v => upEdit('startDate', v)}
+        hint="Select the month production begins (pre-production start). Year can extend into any future year."
+      />
       <div style={{ padding: '12px 14px', background: '#1a1a1a', borderRadius: 8, fontSize: 12, color: '#666' }}>
         Distant locations and studio days can be set in the Production Budget screen after importing.
       </div>
@@ -369,39 +409,72 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   // ── Stage 4: Department Allocations ──────────────────────────────────────────
 
+  const cur4 = edit.currency || '₦'
+  const fmtAmt = (n: number) =>
+    `${cur4} ${n.toLocaleString('en', { maximumFractionDigits: 0 })}`
+
   const stage4 = (
     <>
       <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Stage 4 — Department Allocations</div>
-      <div style={{ fontSize: 12, color: '#555', marginBottom: 16 }}>Enter percentage allocations for each department. Pre-filled values came from the uploaded file.</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px', maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
-        {DEPARTMENTS.map(dept => (
-          <div key={dept.code} style={{ marginBottom: 4 }}>
-            <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-              {dept.code} — {dept.name}
-            </div>
-            <input
-              type="number"
-              value={edit.deptPct[dept.code] ?? ''}
-              onChange={e => upDeptPct(dept.code, e.target.value)}
-              placeholder="% allocation"
-              style={{ width: '100%', padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-            />
-          </div>
-        ))}
+      <div style={{ fontSize: 12, color: '#555', marginBottom: 16 }}>
+        Enter percentage allocations for each department. The currency figure updates live — compare directly against your Excel sheet.
       </div>
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#1a1a1a', borderRadius: 8, fontSize: 12 }}>
-        <span style={{ color: deptTotal > 102 ? '#cc2233' : deptTotal > 98 ? '#4ec24e' : '#f5a623', fontWeight: 600 }}>
-          Total: {deptTotal.toFixed(1)}%
-        </span>
-        {totalBudget > 0 && (
-          <span style={{ color: '#555', marginLeft: 12 }}>
-            = {deptTotalAmount.toLocaleString()} {edit.currency}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
+        {DEPARTMENTS.map(dept => {
+          const pct = parseFloat(edit.deptPct[dept.code] ?? '0') || 0
+          const amt = totalBudget > 0 && pct > 0 ? (pct / 100) * totalBudget : null
+          return (
+            <div key={dept.code} style={{ marginBottom: 2 }}>
+              <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+                {dept.code} — {dept.name}
+              </div>
+              <input
+                type="number"
+                value={edit.deptPct[dept.code] ?? ''}
+                onChange={e => upDeptPct(dept.code, e.target.value)}
+                placeholder="% allocation"
+                style={{ width: '100%', padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+              />
+              {amt !== null ? (
+                <div style={{ fontSize: 11, color: '#666', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtAmt(amt)}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: '#3a3a3a', marginTop: 3 }}>—</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Running total bar */}
+      <div style={{ marginTop: 16, padding: '12px 14px', background: '#1a1a1a', borderRadius: 8, fontSize: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ color: deptTotal > 102 ? '#cc2233' : deptTotal > 98 ? '#4ec24e' : '#f5a623', fontWeight: 600 }}>
+            Total: {deptTotal.toFixed(1)}%
           </span>
-        )}
+          {totalBudget > 0 && (
+            <span style={{ color: '#555' }}>
+              = {fmtAmt(deptTotalAmount)}
+            </span>
+          )}
+          {totalBudget > 0 && (
+            <span style={{ color: '#444', marginLeft: 'auto' }}>
+              Budget: {fmtAmt(totalBudget)}
+            </span>
+          )}
+        </div>
         {Math.abs(deptTotal - 100) > 2 && (
-          <span style={{ color: '#f5a623', marginLeft: 12 }}>
-            ⚠ Should total 100% — {deptTotal < 100 ? `${(100 - deptTotal).toFixed(1)}% unallocated` : `${(deptTotal - 100).toFixed(1)}% over`}
-          </span>
+          <div style={{ color: '#f5a623', marginTop: 6, fontSize: 11 }}>
+            ⚠ Should total 100% — {deptTotal < 100
+              ? `${(100 - deptTotal).toFixed(1)}% unallocated`
+              : `${(deptTotal - 100).toFixed(1)}% over`}
+          </div>
+        )}
+        {totalBudget > 0 && deptTotalAmount > 0 && Math.abs(deptTotalAmount - totalBudget) > totalBudget * 0.01 && (
+          <div style={{ color: '#f5a623', marginTop: 4, fontSize: 11 }}>
+            ⚠ Dept total {fmtAmt(deptTotalAmount)} ≠ budget {fmtAmt(totalBudget)}
+          </div>
         )}
       </div>
     </>
@@ -409,21 +482,112 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   // ── Stage 5: Crew & Salary ───────────────────────────────────────────────────
 
+  function updateKeyRole(idx: number, field: keyof KeyRoleRate, val: string | number) {
+    setExtras(prev => ({
+      ...prev,
+      keyRoles: prev.keyRoles.map((r, i) => i === idx ? { ...r, [field]: val } : r),
+    }))
+  }
+
+  function addKeyRole() {
+    setExtras(prev => ({
+      ...prev,
+      keyRoles: [...prev.keyRoles, { role: '', rate: 0, unit: 'weekly' }],
+    }))
+  }
+
+  function removeKeyRole(idx: number) {
+    setExtras(prev => ({
+      ...prev,
+      keyRoles: prev.keyRoles.filter((_, i) => i !== idx),
+    }))
+  }
+
+  // Estimated total from entered rates (rough: assume 4 weeks per shoot month)
+  const shootMonths = parseFloat(edit.shootMonths) || 0
+  const estimatedRatesTotal = extras.keyRoles.reduce((sum, r) => {
+    if (!r.rate) return sum
+    const multiplier = r.unit === 'daily' ? (shootMonths * 20) : r.unit === 'weekly' ? (shootMonths * 4) : 1
+    return sum + r.rate * multiplier
+  }, 0)
+  const salaryBudget = extras.totalSalaryBudget
+  const salaryVariance = salaryBudget > 0 && estimatedRatesTotal > 0
+    ? Math.abs(estimatedRatesTotal - salaryBudget) / salaryBudget
+    : null
+
   const stage5 = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 20 }}>Stage 5 — Crew & Salary</div>
-      <Select
-        label="Crew Rate Type"
-        value={extras.rateType}
-        onChange={v => upExtras('rateType', v as 'daily' | 'weekly')}
-        options={[{ value: 'weekly', label: 'Weekly Rates' }, { value: 'daily', label: 'Daily Rates' }]}
-      />
-      <Grid>
-        <Input label={`Director ${extras.rateType === 'weekly' ? 'Weekly' : 'Daily'} Rate`}          value={String(extras.directorRate || '')}     onChange={v => upExtras('directorRate', parseFloat(v) || 0)}     type="number" placeholder="e.g. 500000" />
-        <Input label={`Producer / Line Producer ${extras.rateType === 'weekly' ? 'Weekly' : 'Daily'} Rate`} value={String(extras.producerRate || '')} onChange={v => upExtras('producerRate', parseFloat(v) || 0)}     type="number" placeholder="e.g. 350000" />
-        <Input label={`Standard Crew ${extras.rateType === 'weekly' ? 'Weekly' : 'Daily'} Rate`}     value={String(extras.standardCrewRate || '')} onChange={v => upExtras('standardCrewRate', parseFloat(v) || 0)} type="number" placeholder="e.g. 120000" />
-        <Input label="Approximate Total Crew Count"                                                    value={String(extras.crewCount || '')}        onChange={v => upExtras('crewCount', parseInt(v) || 0)}          type="number" placeholder="e.g. 45" />
-      </Grid>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Stage 5 — Key Crew Rates</div>
+      <div style={{ fontSize: 12, color: '#555', marginBottom: 16 }}>
+        Enter rates for HOD and key crew. Leave blank for roles you'll fill in later on the Salary Forecast page.
+        Rates detected from your upload are pre-filled.
+      </div>
+
+      {/* Column headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px 32px', gap: '0 8px', marginBottom: 6 }}>
+        {['Role', 'Rate', 'Unit', ''].map(h => (
+          <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+        ))}
+      </div>
+
+      <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 2 }}>
+        {extras.keyRoles.map((role, idx) => (
+          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px 32px', gap: '0 8px', marginBottom: 8, alignItems: 'center' }}>
+            <input
+              type="text"
+              value={role.role}
+              onChange={e => updateKeyRole(idx, 'role', e.target.value)}
+              placeholder="Role name"
+              style={{ padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+            />
+            <input
+              type="number"
+              value={role.rate || ''}
+              onChange={e => updateKeyRole(idx, 'rate', parseFloat(e.target.value) || 0)}
+              placeholder="e.g. 400000"
+              style={{ padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }}
+            />
+            <select
+              value={role.unit}
+              onChange={e => updateKeyRole(idx, 'unit', e.target.value)}
+              style={{ padding: '8px 8px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+            >
+              <option value="weekly">Weekly</option>
+              <option value="daily">Daily</option>
+              <option value="fixed">Fixed</option>
+            </select>
+            <button
+              onClick={() => removeKeyRole(idx)}
+              style={{ width: 28, height: 34, background: 'transparent', border: '1px solid #333', borderRadius: 6, color: '#cc2233', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >×</button>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={addKeyRole}
+        style={{ marginTop: 6, padding: '8px 16px', background: 'transparent', border: '1px dashed #444', borderRadius: 6, color: '#777', cursor: 'pointer', fontSize: 12, width: '100%' }}
+      >
+        + Add role
+      </button>
+
+      {/* Total salary budget */}
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #222' }}>
+        <Input
+          label="Total Salary Budget (all crew & cast)"
+          value={String(extras.totalSalaryBudget || '')}
+          onChange={v => upExtras('totalSalaryBudget', parseFloat(v) || 0)}
+          type="number"
+          placeholder="e.g. 45000000"
+        />
+        {salaryVariance !== null && salaryVariance > 0.1 && (
+          <div style={{ fontSize: 11, color: '#f5a623', marginTop: -6, marginBottom: 10, lineHeight: 1.6 }}>
+            ⚠ Entered rates total approximately {edit.currency || '₦'}{estimatedRatesTotal.toLocaleString('en', { maximumFractionDigits: 0 })}
+            {' '}over {shootMonths} shoot month(s). Total salary budget is {edit.currency || '₦'}{salaryBudget.toLocaleString('en', { maximumFractionDigits: 0 })}.
+            You may have unaccounted roles.
+          </div>
+        )}
+      </div>
     </>
   )
 

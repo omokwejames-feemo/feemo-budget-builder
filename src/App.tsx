@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
-import { useBudgetStore } from './store/budgetStore'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useBudgetStore, BudgetState } from './store/budgetStore'
 import HomeScreen from './screens/HomeScreen'
+import NoticesDrawer from './components/NoticesDrawer'
 import AssumptionsDashboard from './screens/AssumptionsDashboard'
 import ProductionBudget from './screens/ProductionBudget'
 import SalaryForecast from './screens/SalaryForecast'
@@ -39,6 +40,43 @@ interface PendingUpdate {
   body: string
 }
 
+// ─── Undo/redo state snapshot (budget data only, no session flags) ─────────────
+type UndoSnapshot = Pick<BudgetState,
+  'project' | 'timeline' | 'installments' | 'deptAllocations' | 'lineItems' |
+  'salaryRoles' | 'forecastOverrides' | 'companyProfile' | 'paymentSchedules' | 'expenditureDeductions'
+>
+
+function extractSnapshot(s: BudgetState): UndoSnapshot {
+  return {
+    project:                JSON.parse(JSON.stringify(s.project)),
+    timeline:               JSON.parse(JSON.stringify(s.timeline)),
+    installments:           JSON.parse(JSON.stringify(s.installments)),
+    deptAllocations:        JSON.parse(JSON.stringify(s.deptAllocations)),
+    lineItems:              JSON.parse(JSON.stringify(s.lineItems)),
+    salaryRoles:            JSON.parse(JSON.stringify(s.salaryRoles)),
+    forecastOverrides:      JSON.parse(JSON.stringify(s.forecastOverrides)),
+    companyProfile:         JSON.parse(JSON.stringify(s.companyProfile)),
+    paymentSchedules:       JSON.parse(JSON.stringify(s.paymentSchedules)),
+    expenditureDeductions:  JSON.parse(JSON.stringify(s.expenditureDeductions)),
+  }
+}
+
+// Returns true if any budget-data reference changed (ignores session-only fields)
+function budgetDataChanged(a: BudgetState, b: BudgetState): boolean {
+  return (
+    a.project !== b.project ||
+    a.timeline !== b.timeline ||
+    a.installments !== b.installments ||
+    a.deptAllocations !== b.deptAllocations ||
+    a.lineItems !== b.lineItems ||
+    a.salaryRoles !== b.salaryRoles ||
+    a.forecastOverrides !== b.forecastOverrides ||
+    a.companyProfile !== b.companyProfile ||
+    a.paymentSchedules !== b.paymentSchedules ||
+    a.expenditureDeductions !== b.expenditureDeductions
+  )
+}
+
 export default function App() {
   const [accessGranted, setAccessGranted] = useState(false)
   const [accessExpiresAt, setAccessExpiresAt] = useState<number | null>(null)
@@ -52,6 +90,14 @@ export default function App() {
   const [saveToast, setSaveToast] = useState(false)
   const [showOpenDialog, setShowOpenDialog] = useState(false)
   const [showFreshStartConfirm, setShowFreshStartConfirm] = useState(false)
+  const [showNotices, setShowNotices] = useState(false)
+
+  // ── Undo / redo ──────────────────────────────────────────────────────────────
+  const undoStackRef   = useRef<UndoSnapshot[]>([])
+  const redoStackRef   = useRef<UndoSnapshot[]>([])
+  const isUndoRedoing  = useRef(false)
+  const [undoCount, setUndoCount] = useState(0)
+  const [redoCount, setRedoCount] = useState(0)
 
   const store = useBudgetStore()
   const isFirstMount = useRef(true)
@@ -108,7 +154,76 @@ export default function App() {
     return unsub
   }, [appView])
 
-  // Cmd+S / Ctrl+S global save shortcut
+  // ── Undo / redo subscription ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (appView !== 'app') return
+    let wasPopulating = false
+
+    const unsub = useBudgetStore.subscribe((state, prev) => {
+      if (isUndoRedoing.current) return
+
+      const isPopulating = state.isPopulatingFromUpload
+
+      // Upload just started — capture the single pre-upload snapshot
+      if (!wasPopulating && isPopulating) {
+        if (budgetDataChanged(state, prev)) {
+          // push whatever was there before the upload flag flipped
+          undoStackRef.current = [...undoStackRef.current.slice(-99), extractSnapshot(prev)]
+          redoStackRef.current = []
+          setUndoCount(undoStackRef.current.length)
+          setRedoCount(0)
+        }
+        wasPopulating = true
+        return
+      }
+
+      // During bulk import — suppress individual entries
+      if (isPopulating) return
+
+      wasPopulating = false
+
+      // Regular change — only record if budget data actually changed
+      if (!budgetDataChanged(state, prev)) return
+
+      undoStackRef.current = [...undoStackRef.current.slice(-99), extractSnapshot(prev)]
+      redoStackRef.current = []
+      setUndoCount(undoStackRef.current.length)
+      setRedoCount(0)
+    })
+
+    return unsub
+  }, [appView])
+
+  // Undo handler (stable ref so keydown doesn't need to re-register)
+  const handleUndo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return
+    const snapshot = undoStackRef.current[undoStackRef.current.length - 1]
+    const current  = extractSnapshot(useBudgetStore.getState())
+    isUndoRedoing.current = true
+    store.loadState(snapshot)
+    isUndoRedoing.current = false
+    redoStackRef.current  = [...redoStackRef.current.slice(-99), current]
+    undoStackRef.current  = undoStackRef.current.slice(0, -1)
+    setUndoCount(undoStackRef.current.length)
+    setRedoCount(redoStackRef.current.length)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleRedo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return
+    const snapshot = redoStackRef.current[redoStackRef.current.length - 1]
+    const current  = extractSnapshot(useBudgetStore.getState())
+    isUndoRedoing.current = true
+    store.loadState(snapshot)
+    isUndoRedoing.current = false
+    undoStackRef.current  = [...undoStackRef.current.slice(-99), current]
+    redoStackRef.current  = redoStackRef.current.slice(0, -1)
+    setUndoCount(undoStackRef.current.length)
+    setRedoCount(redoStackRef.current.length)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Cmd+S / Ctrl+S / Ctrl+Z / Ctrl+Shift+Z global shortcuts
   useEffect(() => {
     if (appView !== 'app') return
     function onKey(e: KeyboardEvent) {
@@ -120,11 +235,22 @@ export default function App() {
         e.preventDefault()
         setShowFreshStartConfirm(true)
       }
+      // Undo: Ctrl+Z (but NOT Ctrl+Shift+Z)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault()
+        handleUndo()
+      }
+      // Redo: Ctrl+Shift+Z or Ctrl+Y
+      if (((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') ||
+          ((e.metaKey || e.ctrlKey) && e.key === 'y')) {
+        e.preventDefault()
+        handleRedo()
+      }
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appView])
+  }, [appView, handleUndo, handleRedo])
 
   // Listen for "New Project (Fresh Start)" from the native File menu
   useEffect(() => {
@@ -144,11 +270,14 @@ export default function App() {
       companyProfile: s.companyProfile,
       paymentSchedules: s.paymentSchedules,
       expenditureDeductions: s.expenditureDeductions,
+      notices: s.notices,
     }, null, 2)
   }
 
   function handleNewProject() {
-    isFirstMount.current = true  // must come BEFORE resetStore so the sub doesn't flag unsaved changes
+    isFirstMount.current = true
+    undoStackRef.current = []; redoStackRef.current = []
+    setUndoCount(0); setRedoCount(0)
     store.resetStore()
     setCurrentFilePath(null)
     setHasUnsavedChanges(false)
@@ -158,6 +287,8 @@ export default function App() {
 
   function doFreshStart() {
     isFirstMount.current = true  // must come BEFORE resetStore so the sub doesn't flag unsaved changes
+    undoStackRef.current = []; redoStackRef.current = []
+    setUndoCount(0); setRedoCount(0)
     store.resetStore()
     setCurrentFilePath(null)
     setHasUnsavedChanges(false)
@@ -178,6 +309,8 @@ export default function App() {
     try {
       const parsed = JSON.parse(result.data)
       isFirstMount.current = true  // suppress unsaved-changes flag on initial load
+      undoStackRef.current = []; redoStackRef.current = []
+      setUndoCount(0); setRedoCount(0)
       store.loadState(parsed)
       setCurrentFilePath(result.filePath)
       addRecent(result.filePath)
@@ -194,13 +327,14 @@ export default function App() {
     if (!window.electronAPI) return
     const result = await window.electronAPI.readFileByPath(filePath)
     if (!result.success || !result.data) {
-      // File may have been moved — fall back to native dialog
       await doBrowseAndOpen()
       return
     }
     try {
       const parsed = JSON.parse(result.data)
       isFirstMount.current = true  // suppress unsaved-changes flag on initial load
+      undoStackRef.current = []; redoStackRef.current = []
+      setUndoCount(0); setRedoCount(0)
       store.loadState(parsed)
       setCurrentFilePath(filePath)
       addRecent(filePath)
@@ -455,6 +589,64 @@ export default function App() {
           ))}
         </nav>
 
+        {/* Notices bell */}
+        {(() => {
+          const unread = store.notices.filter(n => !n.dismissed).length
+          return (
+            <button
+              onClick={() => setShowNotices(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                margin: '4px 8px', padding: '8px 10px',
+                background: showNotices ? 'var(--bg3)' : 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 7, cursor: 'pointer', color: 'var(--text3)',
+                fontSize: 12, fontWeight: 500, position: 'relative',
+              }}
+              title="Notices"
+            >
+              <span style={{ fontSize: 14 }}>🔔</span>
+              <span>Notices</span>
+              {unread > 0 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  minWidth: 18, height: 18, borderRadius: 9,
+                  background: 'var(--accent)', color: '#000',
+                  fontSize: 10, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 4px',
+                }}>
+                  {unread}
+                </span>
+              )}
+            </button>
+          )
+        })()}
+
+        {/* Undo/redo status */}
+        {(undoCount > 0 || redoCount > 0) && (
+          <div style={{
+            padding: '6px 12px', fontSize: 10, color: 'var(--text3)',
+            borderTop: '1px solid var(--border)',
+            display: 'flex', gap: 10,
+          }}>
+            <span
+              style={{ cursor: undoCount > 0 ? 'pointer' : 'default', color: undoCount > 0 ? 'var(--text2)' : 'var(--text3)' }}
+              onClick={handleUndo}
+              title="Undo (Ctrl+Z)"
+            >
+              ↩ {undoCount}
+            </span>
+            <span
+              style={{ cursor: redoCount > 0 ? 'pointer' : 'default', color: redoCount > 0 ? 'var(--text2)' : 'var(--text3)' }}
+              onClick={handleRedo}
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              ↪ {redoCount}
+            </span>
+          </div>
+        )}
+
         <div className="sidebar-footer">
           {appVersion ? `v${appVersion}` : 'v1.0.0'} · Feemovision
         </div>
@@ -498,6 +690,14 @@ export default function App() {
 
       {/* Fresh Start dialog (shared overlay — also rendered in home/rebuild/upload views) */}
       {freshStartDialog}
+
+      {/* Notices drawer */}
+      {showNotices && (
+        <NoticesDrawer
+          onClose={() => setShowNotices(false)}
+          onNavigate={(targetScreen) => { setScreen(targetScreen as Screen); setShowNotices(false) }}
+        />
+      )}
 
       {/* Quick-save toast */}
       {saveToast && (

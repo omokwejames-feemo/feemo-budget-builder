@@ -81,6 +81,9 @@ export interface ParsedWorkbook {
     lineItemTotal: number   // total line items extracted across all sheets
     deptCoverage: number   // 0–1 fraction of departments that have any data
   }
+
+  // Raw buffer retained for targeted fallback re-parsing (Fix Batch 11)
+  _rawBuffer?: ArrayBuffer
 }
 
 // SHEET_KEYWORDS and DEPT_ALIASES are imported from ./keywords (Fix Batch 9)
@@ -931,5 +934,29 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedWork
 
   result.documentType = detectDocumentType(result)
   detectConflicts(result)
+  result._rawBuffer = buffer   // retain for targeted fallback re-parsing
   return result
+}
+
+// ─── Single-sheet re-parser for fallback dialog ───────────────────────────────
+// Re-parses one named sheet from the same buffer, returning a partial ParsedWorkbook
+// with only what that sheet produced (salary roles, forecast rows, etc.).
+
+export async function parseSingleSheet(buffer: ArrayBuffer, sheetName: string): Promise<Pick<ParsedWorkbook, 'salaryRoles' | 'forecastRows'>> {
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer)
+
+  const ws = wb.getWorksheet(sheetName)
+  if (!ws || ws.rowCount < 2) {
+    return { salaryRoles: [], forecastRows: [] }
+  }
+
+  // Try both salary and forecast parsers — caller decides which result to use
+  const salaryPart   = parseSalaryForecastSheet(ws, sheetName)
+  const forecastPart = parseProductionForecastSheet(ws, sheetName)
+
+  return {
+    salaryRoles:  (salaryPart.salaryRoles  as SalaryRole[])        ?? [],
+    forecastRows: (forecastPart.forecastRows as ParsedForecastRow[]) ?? [],
+  }
 }
