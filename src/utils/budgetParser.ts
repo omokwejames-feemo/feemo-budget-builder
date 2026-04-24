@@ -435,8 +435,9 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
       return
     }
 
-    // Subtotal / total row within a department
-    if (/^(total|subtotal|dept.?target|dept.?total)/.test(col1n) || /^(total|subtotal)/.test(norm(col2))) {
+    // Subtotal / total / grand-total rows — never add as line items
+    if (/^(total|subtotal|sub.?total|dept.?target|dept.?total|grand.?total|below.?the.?line|above.?the.?line)/.test(col1n)
+      || /^(total|subtotal|grand)/.test(norm(col2))) {
       if (currentDept && !r.deptAllocations![currentDept] && positiveNums.length) {
         const largest = Math.max(...positiveNums)
         if (largest > 1000)
@@ -450,7 +451,7 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
     // Skip header-like rows
     const detail = col2 || col1
     if (!detail || detail.length < 2) return
-    if (/^(sch\.?no|sched|detail|no\.|rate|qty|unit|i\/e|\d+\.\s*$)/i.test(detail)) return
+    if (/^(sch\.?no|sched|detail|no\.|rate|qty|unit|i\/e|grand.?total|below.?the.?line|above.?the.?line|sub.?total|\d+\.\s*$)/i.test(detail)) return
 
     // Extract line item values
     const largeNums = positiveNums.filter(n => n > 10)
@@ -471,7 +472,7 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
 
     // If an explicit No. column was detected, use it; otherwise check if two small
     // integers exist (both < 500) that might have been conflated — smaller → no, larger → qty.
-    let effectiveNo = noRaw && noRaw > 0 && noRaw < 500 ? noRaw : 1
+    let effectiveNo = noRaw && noRaw > 0 && noRaw < 500 && noRaw !== total ? noRaw : 1
     if (colMap.no < 0 && effectiveNo === 1) {
       // No explicit No. column: if qty looks like a count (≤20) and we have other
       // small integers that look like duration, leave as-is (no correction needed).

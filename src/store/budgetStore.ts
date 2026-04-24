@@ -176,6 +176,8 @@ export interface BudgetState {
   lastDriveSave: string | null // ISO timestamp
   notices: AppNotice[]          // persisted with project file
 
+  forecastLocked: boolean  // true after user accepts a deficit-suggested schedule
+
   // ── Session-only (not persisted) ──────────────────────────────────────────
   isPopulatingFromUpload: boolean   // suppresses validation during bulk import
   lastUploadAudit: UploadAudit | null
@@ -201,6 +203,7 @@ export interface BudgetState {
   addExpenditureDeduction: (d: ExpenditureDeduction) => void
   removeExpenditureDeductions: (scheduleId: string) => void
   setLastDriveSave: (ts: string) => void
+  setForecastLocked: (locked: boolean) => void
   setIsPopulatingFromUpload: (v: boolean) => void
   setLastUploadAudit: (audit: UploadAudit | null) => void
   addNotice: (notice: Omit<AppNotice, 'id' | 'timestamp' | 'dismissed'>) => void
@@ -265,6 +268,7 @@ const initialState = {
   expenditureDeductions: [] as ExpenditureDeduction[],
   lastDriveSave: null as string | null,
   notices: [] as AppNotice[],
+  forecastLocked: false,
   // Session-only (always reset on app start / resetStore)
   isPopulatingFromUpload: false,
   lastUploadAudit: null as UploadAudit | null,
@@ -318,6 +322,7 @@ export const useBudgetStore = create<BudgetState>()(
       removeExpenditureDeductions: (scheduleId) =>
         set(s => ({ expenditureDeductions: s.expenditureDeductions.filter(d => d.scheduleId !== scheduleId) })),
       setLastDriveSave: (ts) => set({ lastDriveSave: ts }),
+      setForecastLocked: (locked) => set({ forecastLocked: locked }),
       setIsPopulatingFromUpload: (v) => set({ isPopulatingFromUpload: v }),
       setLastUploadAudit: (audit) => set({ lastUploadAudit: audit }),
       addNotice: (notice) => set(s => ({
@@ -348,6 +353,7 @@ export const useBudgetStore = create<BudgetState>()(
         lineItems: s.lineItems,
         salaryRoles: s.salaryRoles,
         forecastOverrides: s.forecastOverrides,
+        forecastLocked: s.forecastLocked,
         companyProfile: s.companyProfile,
         paymentSchedules: s.paymentSchedules,
         expenditureDeductions: s.expenditureDeductions,

@@ -175,7 +175,7 @@ export default function UpdateDialog({ update, onDismiss }: UpdateDialogProps) {
         <div style={{ padding: '16px 28px', display: 'flex', gap: 10, alignItems: 'center' }}>
           {dlState.status === 'idle' && (
             <button className="btn btn-primary" style={{ fontSize: 13, padding: '9px 22px' }} onClick={handleDownload}>
-              ↓ Download Update
+              Update Now
             </button>
           )}
           {dlState.status === 'ready' && (

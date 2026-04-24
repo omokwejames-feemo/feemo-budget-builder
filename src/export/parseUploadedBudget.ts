@@ -88,10 +88,20 @@ export async function parseUploadedBudget(file: File): Promise<ParsedBudget> {
   }
 
   // ── PRODUCTION BUDGET sheet ────────────────────────────────────────────────
-  // Column pattern: SCH.NO. | DETAIL | NO. | RATE | QTY | UNIT | TOTAL | I | E
   const budgetSheet = wb.getWorksheet('PRODUCTION BUDGET') ?? wb.getWorksheet('Production Budget')
   if (budgetSheet) {
     let currentDept: DeptCode | null = null
+
+    // Detect 8-col (new) vs 7-col (old) format by inspecting header row
+    // New: col3=NO., col4=QTY, col5=RATE, col6=UNIT, col7=I/E, col8=TOTAL
+    // Old: col3=QTY, col4=RATE, col5=UNIT, col6=I/E, col7=TOTAL
+    let useNewFormat = true // default to new
+    budgetSheet.eachRow((row, rowNum) => {
+      if (rowNum > 6) return
+      const c3 = cellStr(row.getCell(3)).trim().toUpperCase()
+      if (c3 === 'QTY' || c3 === 'QUANTITY') { useNewFormat = false }
+      else if (c3 === 'NO.' || c3 === 'NO' || c3 === 'NUMBER') { useNewFormat = true }
+    })
 
     budgetSheet.eachRow((row) => {
       const c1 = cellStr(row.getCell(1))
@@ -102,7 +112,6 @@ export async function parseUploadedBudget(file: File): Promise<ParsedBudget> {
       const codeFromC2 = matchDeptCode(c2)
       const detectedCode = codeFromC1 ?? codeFromC2
       if (detectedCode && (c2.length > 2 || c1.length > 2)) {
-        // Check it looks like a section header (has dept name text)
         const combined = (c1 + c2).toUpperCase()
         const dept = DEPARTMENTS.find(d => d.code === detectedCode)
         if (dept && combined.length > 3) {
@@ -113,20 +122,32 @@ export async function parseUploadedBudget(file: File): Promise<ParsedBudget> {
 
       if (!currentDept) return
 
-      // Line items: col1=sched no, col2=detail, col3=no., col4=qty, col5=rate, col6=unit, col7=i/e, col8=total
       const schedNo = c1.trim()
       const detail = c2.trim()
-      const no = cellNum(row.getCell(3)) || 1
-      const qty = cellNum(row.getCell(4)) || 1
-      const rate = cellNum(row.getCell(5))
-      const unit = cellStr(row.getCell(6)) || 'Flat'
-      const totalFromSheet = cellNum(row.getCell(8))
-      const ieStr = cellStr(row.getCell(7)).trim().toUpperCase()
-      const ie: 'I' | 'E' = ieStr === 'I' ? 'I' : 'E'
 
-      // Skip section headers, totals, empty rows
-      if (!detail || /^(TOTAL|DEPT TARGET|SCH\.NO\.|DETAIL|NO\.|RATE|QTY|UNIT)/i.test(detail)) return
-      if (!schedNo && !detail) return
+      // Skip totals, headers, and summary rows
+      if (!detail) return
+      if (/^(TOTAL|DEPT\.?\s*TARGET|SCH\.?NO\.?|DETAIL|NO\.?|RATE|QTY|UNIT|GRAND\s*TOTAL|BELOW.THE.LINE|ABOVE.THE.LINE|SUB.?TOTAL)/i.test(detail)) return
+      if (!schedNo && detail.length < 2) return
+
+      let no: number, qty: number, rate: number, unit: string, ie: 'I' | 'E', totalFromSheet: number
+      if (useNewFormat) {
+        // col3=NO., col4=QTY, col5=RATE, col6=UNIT, col7=I/E, col8=TOTAL
+        no = cellNum(row.getCell(3)) || 1
+        qty = cellNum(row.getCell(4)) || 1
+        rate = cellNum(row.getCell(5))
+        unit = cellStr(row.getCell(6)) || 'Flat'
+        ie = cellStr(row.getCell(7)).trim().toUpperCase() === 'E' ? 'E' : 'I'
+        totalFromSheet = cellNum(row.getCell(8))
+      } else {
+        // col3=QTY, col4=RATE, col5=UNIT, col6=I/E, col7=TOTAL
+        no = 1
+        qty = cellNum(row.getCell(3)) || 1
+        rate = cellNum(row.getCell(4))
+        unit = cellStr(row.getCell(5)) || 'Flat'
+        ie = cellStr(row.getCell(6)).trim().toUpperCase() === 'E' ? 'E' : 'I'
+        totalFromSheet = cellNum(row.getCell(7))
+      }
 
       const effectiveRate = rate > 0 ? rate : (no * qty > 0 ? totalFromSheet / (no * qty) : totalFromSheet)
 

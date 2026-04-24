@@ -41,7 +41,9 @@ function FormattedNumberCell({ value, onChange }: { value: number; onChange: (v:
         value={raw}
         autoFocus
         onChange={e => setRaw(e.target.value)}
-        onBlur={() => { setEditing(false); onChange(Number(raw) || 0) }}
+        onBlur={() => { setEditing(false); const n = parseFloat(raw); onChange(isNaN(n) || n < 0 ? 0 : n) }}
+        onFocus={e => e.target.select()}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
         style={{ textAlign: 'right' }}
       />
     )
@@ -50,7 +52,7 @@ function FormattedNumberCell({ value, onChange }: { value: number; onChange: (v:
     <div
       className="td-input"
       style={{ textAlign: 'right', cursor: 'text', userSelect: 'none', color: value > 0 ? 'inherit' : 'var(--text3)' }}
-      onClick={() => { setRaw(String(value)); setEditing(true) }}
+      onClick={() => { setRaw(value > 0 ? String(value) : ''); setEditing(true) }}
     >
       {value > 0 ? fmtNum(value) : '0'}
     </div>

@@ -15,6 +15,7 @@ import ElectronStore from 'electron-store'
 
 autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = false
+autoUpdater.allowPrerelease = false
 
 // Track the downloaded zip path so we can apply it ourselves (bypassing Squirrel.Mac)
 let downloadedZipPath: string | null = null

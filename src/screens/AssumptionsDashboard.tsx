@@ -62,6 +62,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
     deptAllocations, setDeptAllocation,
     resetStore, resetTimeline, resetInstallments, resetDeptAllocations,
     companyProfile, setCompanyProfile,
+    forecastLocked, setForecastLocked,
   } = useBudgetStore()
 
   const [autofillConfirm, setAutofillConfirm] = useState<'juriya' | 'bc' | null>(null)
@@ -425,10 +426,10 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
               <span style={{ fontSize: 12, color: 'var(--text2)' }}>1 {project.currency} =</span>
               <input
                 type="number"
-                min={1}
                 step={1}
                 value={project.exchangeRate || ''}
-                onChange={e => setProject({ exchangeRate: Number(e.target.value) || 1 })}
+                onChange={e => setProject({ exchangeRate: Number(e.target.value) || 0 })}
+                onFocus={e => e.target.select()}
                 placeholder="e.g. 1600"
                 style={{ width: 110 }}
               />
@@ -460,7 +461,8 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
                   type="number"
                   min={1}
                   value={project.episodeDuration || ''}
-                  onChange={e => setProject({ episodeDuration: Number(e.target.value) })}
+                  onChange={e => setProject({ episodeDuration: Number(e.target.value) || 0 })}
+                  onFocus={e => e.target.select()}
                 />
               </div>
 
@@ -473,6 +475,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
                     step={0.5}
                     value={project.daysPerEpisode || ''}
                     onChange={e => handleDaysPerEpisodeChange(Number(e.target.value))}
+                    onFocus={e => e.target.select()}
                   />
                   <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
                     e.g. 1 day per episode (fast daily shoot)
@@ -487,6 +490,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
                     step={0.5}
                     value={project.weeksPerEpisode || ''}
                     onChange={e => handleWeeksPerEpisodeChange(Number(e.target.value))}
+                    onFocus={e => e.target.select()}
                   />
                   <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
                     Default: 1 week per 45-min episode
@@ -611,6 +615,12 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
               style={{ fontSize: 11, color: 'var(--text3)' }}
               onClick={() => { if (installments.length === 0 || confirm('Remove all installments?')) resetInstallments() }}
             >Reset</button>
+            {forecastLocked && (
+              <span style={{ fontSize: 10, color: 'var(--blue)', background: 'rgba(52,152,219,0.12)', padding: '2px 8px', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}
+                onClick={() => setForecastLocked(false)} title="Schedule was set from Production Forecast. Click to unlock.">
+                🔒 Locked
+              </span>
+            )}
             {sectionMark(instComplete)}
           </div>
         </div>
@@ -677,6 +687,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
                       max="100"
                       value={pct > 0 ? parseFloat(pct.toFixed(2)) : ''}
                       onChange={e => setDeptAllocation(dept.code as DeptCode, Number(e.target.value))}
+                      onFocus={e => e.target.select()}
                       placeholder="0"
                     />
                   </div>

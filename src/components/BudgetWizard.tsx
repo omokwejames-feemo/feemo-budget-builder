@@ -432,6 +432,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
                 type="number"
                 value={edit.deptPct[dept.code] ?? ''}
                 onChange={e => upDeptPct(dept.code, e.target.value)}
+                onFocus={e => e.target.select()}
                 placeholder="% allocation"
                 style={{ width: '100%', padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
               />
@@ -607,6 +608,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
             <input
               type="number" value={inst.pct || ''}
               onChange={e => updateInstallment(i, 'pct', parseFloat(e.target.value) || 0)}
+              onFocus={e => e.target.select()}
               placeholder="e.g. 40"
               style={{ width: '100%', padding: '9px 12px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 7, color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
             />
@@ -614,8 +616,10 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
           <div style={{ flex: 1 }}>
             <Label>Month of Receipt</Label>
             <input
-              type="number" value={inst.month || ''}
-              onChange={e => updateInstallment(i, 'month', parseInt(e.target.value) || 1)}
+              type="number" value={inst.month > 0 ? inst.month : ''}
+              onChange={e => updateInstallment(i, 'month', Math.max(1, parseInt(e.target.value) || 0))}
+              onBlur={e => { if (!e.target.value) updateInstallment(i, 'month', 1) }}
+              onFocus={e => e.target.select()}
               placeholder="e.g. 1"
               style={{ width: '100%', padding: '9px 12px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 7, color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
             />

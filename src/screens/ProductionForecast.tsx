@@ -104,7 +104,7 @@ function EditableForecastCell({ value, onSave, cur }: { value: number; onSave: (
 
 export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }) {
   const store = useBudgetStore()
-  const { timeline, project, installments, salaryRoles, forecastOverrides, setForecastOverride, setInstallments } = store
+  const { timeline, project, installments, salaryRoles, forecastOverrides, forecastLocked, setForecastOverride, setInstallments, setForecastLocked } = store
   const totalMonths = getTotalMonths(timeline)
   const cur = project.currency || 'N'
   const months = Array.from({ length: totalMonths }, (_, i) => i + 1)
@@ -219,6 +219,21 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
         </div>
       </div>
 
+      {forecastLocked && (
+        <div style={{ background: 'rgba(52,152,219,0.08)', border: '1px solid rgba(52,152,219,0.3)', borderRadius: 8, padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ color: 'var(--blue)', fontWeight: 600, fontSize: 13 }}>
+            Schedule locked — changes on Assumptions will not overwrite this schedule.
+          </span>
+          <button
+            className="btn btn-sm"
+            style={{ background: 'transparent', color: 'var(--text2)', border: '1px solid var(--border)', flexShrink: 0 }}
+            onClick={() => setForecastLocked(false)}
+          >
+            Reset Lock
+          </button>
+        </div>
+      )}
+
       {issues.map(issue => (
         <div key={issue.id} style={{
           padding: '10px 14px', borderRadius: 8, marginBottom: 10,
@@ -252,6 +267,7 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
               onClick={() => {
                 const suggested = suggestInstallmentTiming(installments, totalPaymentsPerMonth, project.totalBudget, timeline)
                 setInstallments(suggested)
+                setForecastLocked(true)
               }}
             >
               Apply Fix
@@ -488,6 +504,7 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
                 className="btn btn-primary"
                 onClick={() => {
                   setInstallments(suggestedSchedule)
+                  setForecastLocked(true)
                   setShowSuggestion(false)
                   setDeficitDismissed(true)
                   setSuggestedSchedule(null)

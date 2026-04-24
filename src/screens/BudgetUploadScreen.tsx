@@ -1030,6 +1030,7 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
                     <input
                       type="number" value={pct}
                       onChange={e => upDeptPct(dept.code, e.target.value)}
+                      onFocus={e => e.target.select()}
                       placeholder="% allocation"
                       style={{ width: '100%', padding: '9px 12px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
                     />
@@ -1057,6 +1058,7 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
                         <input
                           type="number" value={edit.deptPct[dept.code] ?? ''}
                           onChange={e => upDeptPct(dept.code, e.target.value)}
+                          onFocus={e => e.target.select()}
                           placeholder="% allocation"
                           style={{ width: '100%', padding: '9px 12px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, color: '#555', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
                         />
