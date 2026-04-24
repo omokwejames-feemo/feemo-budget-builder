@@ -130,6 +130,26 @@ export interface SalaryRole {
   monthlyAmounts: Record<number, number>
 }
 
+// ─── Upload audit (session-only, not persisted) ───────────────────────────────
+
+export interface UploadAuditField {
+  field: string
+  value: string
+  populated: boolean
+}
+
+export interface UploadAudit {
+  fileName: string
+  uploadedAt: string         // ISO timestamp
+  documentType: string
+  totalBudgetDetected: string
+  fieldsPopulated: UploadAuditField[]
+  lineItemCount: number
+  salaryRoleCount: number
+  paymentScheduleCount: number
+  crossCheckMessage: string | null  // null = within 1% tolerance
+}
+
 export interface BudgetState {
   project: ProjectDetails
   timeline: Timeline
@@ -142,6 +162,10 @@ export interface BudgetState {
   paymentSchedules: PaymentSchedule[]
   expenditureDeductions: ExpenditureDeduction[]
   lastDriveSave: string | null // ISO timestamp
+
+  // ── Session-only (not persisted) ──────────────────────────────────────────
+  isPopulatingFromUpload: boolean   // suppresses validation during bulk import
+  lastUploadAudit: UploadAudit | null
 
   setProject: (p: Partial<ProjectDetails>) => void
   setTimeline: (t: Partial<Timeline>) => void
@@ -164,6 +188,8 @@ export interface BudgetState {
   addExpenditureDeduction: (d: ExpenditureDeduction) => void
   removeExpenditureDeductions: (scheduleId: string) => void
   setLastDriveSave: (ts: string) => void
+  setIsPopulatingFromUpload: (v: boolean) => void
+  setLastUploadAudit: (audit: UploadAudit | null) => void
   resetStore: () => void
   resetTimeline: () => void
   resetInstallments: () => void
@@ -222,6 +248,9 @@ const initialState = {
   paymentSchedules: [] as PaymentSchedule[],
   expenditureDeductions: [] as ExpenditureDeduction[],
   lastDriveSave: null as string | null,
+  // Session-only (always reset on app start / resetStore)
+  isPopulatingFromUpload: false,
+  lastUploadAudit: null as UploadAudit | null,
 }
 
 export const useBudgetStore = create<BudgetState>()(
@@ -272,6 +301,8 @@ export const useBudgetStore = create<BudgetState>()(
       removeExpenditureDeductions: (scheduleId) =>
         set(s => ({ expenditureDeductions: s.expenditureDeductions.filter(d => d.scheduleId !== scheduleId) })),
       setLastDriveSave: (ts) => set({ lastDriveSave: ts }),
+      setIsPopulatingFromUpload: (v) => set({ isPopulatingFromUpload: v }),
+      setLastUploadAudit: (audit) => set({ lastUploadAudit: audit }),
       resetStore: () => set(initialState),
       resetTimeline: () => set({ timeline: defaultTimeline }),
       resetInstallments: () => set({ installments: [] }),
@@ -292,6 +323,7 @@ export const useBudgetStore = create<BudgetState>()(
         paymentSchedules: s.paymentSchedules,
         expenditureDeductions: s.expenditureDeductions,
         lastDriveSave: s.lastDriveSave,
+        // isPopulatingFromUpload and lastUploadAudit are intentionally excluded
       }),
     }
   )

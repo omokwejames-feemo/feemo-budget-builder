@@ -172,6 +172,54 @@ function toEditState(pw: ParsedWorkbook): EditState {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Salary role name matching ────────────────────────────────────────────────
+// Fuzzy-match parsed role names against existing grid roles so we don't create
+// duplicates when uploading into a project that already has salary rows.
+
+const ROLE_ALIASES: Record<string, string[]> = {
+  'director':          ['director', 'dir'],
+  'dop':               ['dop', 'dp', 'director of photography', 'cinematographer'],
+  'producer':          ['producer', 'exec producer', 'executive producer', 'line producer'],
+  'editor':            ['editor', 'film editor', 'picture editor'],
+  'sound':             ['sound', 'sound designer', 'sound mixer', 'boom operator'],
+  'gaffer':            ['gaffer', 'chief electrician'],
+  'art director':      ['art director', 'art dept head', 'production designer'],
+  'makeup':            ['makeup', 'make-up', 'mua', 'hair and makeup'],
+  'wardrobe':          ['wardrobe', 'costume designer', 'stylist'],
+  'runner':            ['runner', 'production runner', 'pa', 'production assistant'],
+}
+
+function normRole(s: string) { return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim() }
+
+function roleNamesMatch(a: string, b: string): boolean {
+  const na = normRole(a), nb = normRole(b)
+  if (na === nb) return true
+  for (const aliases of Object.values(ROLE_ALIASES)) {
+    if (aliases.includes(na) && aliases.includes(nb)) return true
+  }
+  return false
+}
+
+function mergeSalaryRoles(
+  parsed: import('../store/budgetStore').SalaryRole[],
+  existing: import('../store/budgetStore').SalaryRole[],
+): import('../store/budgetStore').SalaryRole[] {
+  if (existing.length === 0) return parsed   // fresh project — just use parsed roles
+  const result = [...existing]
+  for (const p of parsed) {
+    const idx = result.findIndex(e => roleNamesMatch(e.role, p.role) && e.deptCode === p.deptCode)
+    if (idx >= 0) {
+      // Update existing row's monthly amounts, keep everything else
+      result[idx] = { ...result[idx], monthlyAmounts: { ...result[idx].monthlyAmounts, ...p.monthlyAmounts } }
+    } else {
+      result.push(p)  // no match — append
+    }
+  }
+  return result
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const store = useBudgetStore()
   const [stage, setStage] = useState<'parsing' | 'error' | 'confirm'>('parsing')
@@ -184,6 +232,8 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const [typeOverride, setTypeOverride] = useState<BudgetDocumentType | null>(null)
   const [showWizard, setShowWizard] = useState(false)
   const [wizardExtras, setWizardExtras] = useState<WizardExtras | null>(null)
+  const [uploadedFileName, setUploadedFileName] = useState('')
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false)
 
   useEffect(() => { handleUpload() }, [])
 
@@ -191,6 +241,9 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
     if (!window.electronAPI) { setParseError('Electron API not available.'); setStage('error'); return }
     const res = await window.electronAPI.openXlsxBudget()
     if (!res.success || !res.buffer) { onCancel(); return }
+
+    // Capture file name for the audit log
+    if (res.filePath) setUploadedFileName(res.filePath.split('/').pop() ?? res.filePath)
 
     try {
       const arrayBuf = new Uint8Array(res.buffer).buffer
@@ -233,30 +286,67 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
 
   function handleCommit() {
     if (!edit || !pw) return
-    const n = (s: string) => { const v = parseFloat(s); return isNaN(v) ? 0 : v }
-    const ns = (s: string) => { const v = parseFloat(s); return isNaN(v) ? undefined : v }
 
-    // ── Project ────────────────────────────────────────────────────────────────
+    // Show overwrite warning first if the project already has data
+    const hasExistingData = store.project.totalBudget > 0 ||
+      DEPARTMENTS.some(d => (store.lineItems[d.code]?.length ?? 0) > 0)
+    if (hasExistingData && !showOverwriteWarning) {
+      setShowOverwriteWarning(true)
+      return
+    }
+    setShowOverwriteWarning(false)
+
+    doCommit()
+  }
+
+  function doCommit() {
+    if (!edit || !pw) return
+    const n  = (s: string) => { const v = parseFloat(s); return isNaN(v) ? 0 : v }
+    const ns = (s: string) => { const v = parseFloat(s); return isNaN(v) ? undefined : v }
+    const cur = edit.currency || store.project.currency || ''
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 1 — Raise the population flag so validation checks are suppressed while
+    //          we write data. This prevents the "Budget Exceeded" dialog from firing
+    //          before totalBudget and line items are both finalised.
+    // ─────────────────────────────────────────────────────────────────────────────
+    store.setIsPopulatingFromUpload(true)
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 2 — Assumptions first (totalBudget MUST be written before line items so
+    //          that the budget-exceeded check compares against the right figure).
+    // ─────────────────────────────────────────────────────────────────────────────
     store.setProject({
-      title: edit.title || undefined,
-      company: edit.company || undefined,
-      totalBudget: ns(edit.totalBudget),
-      currency: edit.currency || undefined,
-      shootDays: ns(edit.shootDays),
-      startDate: edit.startDate || undefined,
+      title:               edit.title    || undefined,
+      company:             edit.company  || undefined,
+      totalBudget:         ns(edit.totalBudget),
+      currency:            edit.currency || undefined,
+      shootDays:           ns(edit.shootDays),
+      startDate:           edit.startDate || undefined,
       productionFeePercent: ns(edit.productionFeePercent),
+      // Wizard extras override parsed values if present
+      ...(wizardExtras ? {
+        format:          wizardExtras.format          || undefined,
+        episodes:        wizardExtras.episodes         || undefined,
+        episodeDuration: wizardExtras.episodeDuration  || undefined,
+        location:        wizardExtras.location         || undefined,
+        shootDays:       wizardExtras.shootDays        || undefined,
+      } : {}),
     })
 
-    // ── Timeline ───────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 3 — Timeline
+    // ─────────────────────────────────────────────────────────────────────────────
     store.setTimeline({
       developmentMonths: ns(edit.developmentMonths),
-      preProdMonths: ns(edit.preProdMonths),
-      shootMonths: ns(edit.shootMonths),
-      postMonths: ns(edit.postMonths),
+      preProdMonths:     ns(edit.preProdMonths),
+      shootMonths:       ns(edit.shootMonths),
+      postMonths:        ns(edit.postMonths),
     })
 
-    // ── Dept allocations ───────────────────────────────────────────────────────
-    // Contingency % → dept II
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 4 — Department allocations (contingency first, then all depts)
+    // ─────────────────────────────────────────────────────────────────────────────
     if (edit.contingencyPercent) store.setDeptAllocation('II', n(edit.contingencyPercent))
 
     for (const dept of DEPARTMENTS) {
@@ -266,26 +356,34 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
       if (pct > 0) store.setDeptAllocation(dept.code, pct)
     }
 
-    // Where conflicts resolved, apply winning source value to dept allocations
+    // Apply any user-resolved conflict values
     for (const conflict of conflicts) {
       if (!conflict.chosenSource || !conflict.field.startsWith('dept_')) continue
       const code = conflict.field.replace('dept_', '') as DeptCode
       const chosen = conflict.sources.find(s => s.sheet === conflict.chosenSource)
       if (chosen && typeof chosen.value === 'number') {
-        const totalBudget = n(edit.totalBudget)
-        if (totalBudget > 0) store.setDeptAllocation(code, (chosen.value / totalBudget) * 100)
+        const tb = n(edit.totalBudget)
+        if (tb > 0) store.setDeptAllocation(code, (chosen.value / tb) * 100)
       }
     }
 
-    // ── Line items ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 5 — Line items (now safe — totalBudget already written)
+    // ─────────────────────────────────────────────────────────────────────────────
     for (const [code, items] of Object.entries(pw.lineItems)) {
       if (items && items.length > 0) store.setLineItems(code as DeptCode, items)
     }
 
-    // ── Salary roles ───────────────────────────────────────────────────────────
-    if (pw.salaryRoles.length > 0) store.setSalaryRoles(pw.salaryRoles)
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 6 — Salary roles (merge into existing grid instead of wholesale replace)
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (pw.salaryRoles.length > 0) {
+      store.setSalaryRoles(mergeSalaryRoles(pw.salaryRoles, store.salaryRoles))
+    }
 
-    // ── Forecast overrides (dept × month) ─────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 7 — Forecast overrides (cashflow monthly figures)
+    // ─────────────────────────────────────────────────────────────────────────────
     for (const row of pw.forecastRows) {
       if (!row.deptCode) continue
       for (const [month, value] of Object.entries(row.monthlyValues)) {
@@ -293,44 +391,97 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
       }
     }
 
-    // ── Wizard extras (format, installments, location) ────────────────────────
-    if (wizardExtras) {
-      store.setProject({
-        format: wizardExtras.format || undefined,
-        episodes: wizardExtras.episodes || undefined,
-        episodeDuration: wizardExtras.episodeDuration || undefined,
-        location: wizardExtras.location || undefined,
-        shootDays: wizardExtras.shootDays || undefined,
-      })
-      if (wizardExtras.installments.length > 0) {
-        store.setInstallments(wizardExtras.installments.map((inst, i) => ({
-          id: `wiz_${i}`,
-          label: `Installment ${i + 1}`,
-          percentage: inst.pct,
-          trigger: '',
-          month: inst.month,
-        })))
-      }
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 8 — Wizard installments
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (wizardExtras && wizardExtras.installments.length > 0) {
+      store.setInstallments(wizardExtras.installments.map((inst, i) => ({
+        id: `wiz_${i}`,
+        label: `Installment ${i + 1}`,
+        percentage: inst.pct,
+        trigger: '',
+        month: inst.month,
+      })))
     }
 
-    // ── Payment schedules (drafts) ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 9 — Payment schedules (as drafts)
+    // ─────────────────────────────────────────────────────────────────────────────
     const vat = n(edit.vatRate)
     const wht = n(edit.whtRate)
     for (const ps of pw.paymentSchedules) {
       if (!ps.rows || ps.rows.length === 0) continue
       store.addPaymentSchedule({
-        id: ps.id ?? String(Date.now()),
+        id:             ps.id ?? String(Date.now()),
         scheduleNumber: ps.scheduleNumber ?? 'PS-001',
-        globalVatRate: ps.globalVatRate || vat,
-        globalWhtRate: ps.globalWhtRate || wht,
-        rows: ps.rows,
-        preparedBy: ps.preparedBy ?? '',
-        reviewedBy: ps.reviewedBy ?? '',
-        approvedBy: ps.approvedBy ?? '',
-        createdAt: ps.createdAt ?? new Date().toISOString(),
-        status: 'draft',
+        globalVatRate:  ps.globalVatRate || vat,
+        globalWhtRate:  ps.globalWhtRate || wht,
+        rows:           ps.rows,
+        preparedBy:     ps.preparedBy ?? '',
+        reviewedBy:     ps.reviewedBy ?? '',
+        approvedBy:     ps.approvedBy ?? '',
+        createdAt:      ps.createdAt ?? new Date().toISOString(),
+        status:         'draft',
       })
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 10 — Clear the population flag now that all data is written
+    // ─────────────────────────────────────────────────────────────────────────────
+    store.setIsPopulatingFromUpload(false)
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 11 — Soft cross-check: compare line item sum vs stated totalBudget.
+    //           >1% delta gets an informational note — NOT an error, NOT red.
+    // ─────────────────────────────────────────────────────────────────────────────
+    const lineItemTotal = Object.values(pw.lineItems)
+      .reduce((s, items) => s + (items?.reduce((ss, item) => ss + item.qty * item.rate, 0) ?? 0), 0)
+    const tb = n(edit.totalBudget)
+    let crossCheckMessage: string | null = null
+    if (tb > 0 && lineItemTotal > 0) {
+      const diff = Math.abs(lineItemTotal - tb)
+      if (diff / tb > 0.01) {
+        const fmtN = (x: number) => `${cur}${x.toLocaleString('en', { maximumFractionDigits: 0 })}`
+        crossCheckMessage =
+          `Line item total ${fmtN(lineItemTotal)} differs from stated budget ${fmtN(tb)} ` +
+          `by ${fmtN(diff)} (${((diff / tb) * 100).toFixed(1)}%). ` +
+          `This may be due to rounding or an unallocated reserve. ` +
+          `You can adjust in the budget grid or update the total in Assumptions.`
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STEP 12 — Build and store the upload audit log (visible on Production Budget
+    //           screen as a collapsible panel).
+    // ─────────────────────────────────────────────────────────────────────────────
+    const auditFields: import('../store/budgetStore').UploadAuditField[] = [
+      { field: 'Total Budget',         value: edit.totalBudget ? `${cur}${Number(edit.totalBudget).toLocaleString()}` : '', populated: !!edit.totalBudget },
+      { field: 'Currency',             value: edit.currency,        populated: !!edit.currency },
+      { field: 'Production Title',     value: edit.title,           populated: !!edit.title },
+      { field: 'Company',              value: edit.company,         populated: !!edit.company },
+      { field: 'Shoot Days',           value: edit.shootDays,       populated: !!edit.shootDays },
+      { field: 'Start Date',           value: edit.startDate,       populated: !!edit.startDate },
+      { field: 'Production Fee %',     value: edit.productionFeePercent, populated: !!edit.productionFeePercent },
+      { field: 'Contingency %',        value: edit.contingencyPercent,   populated: !!edit.contingencyPercent },
+      { field: 'VAT Rate %',           value: edit.vatRate,              populated: !!edit.vatRate },
+      { field: 'WHT Rate %',           value: edit.whtRate,              populated: !!edit.whtRate },
+      { field: 'Dev Months',           value: edit.developmentMonths,    populated: !!edit.developmentMonths },
+      { field: 'Pre-Prod Months',      value: edit.preProdMonths,        populated: !!edit.preProdMonths },
+      { field: 'Shoot Months',         value: edit.shootMonths,          populated: !!edit.shootMonths },
+      { field: 'Post-Prod Months',     value: edit.postMonths,           populated: !!edit.postMonths },
+    ]
+
+    store.setLastUploadAudit({
+      fileName:            uploadedFileName || 'uploaded-budget.xlsx',
+      uploadedAt:          new Date().toISOString(),
+      documentType:        BUDGET_DOC_TYPE_LABELS[typeOverride ?? detectedType],
+      totalBudgetDetected: edit.totalBudget ? `${cur}${Number(edit.totalBudget).toLocaleString()}` : '—',
+      fieldsPopulated:     auditFields,
+      lineItemCount:       Object.values(pw.lineItems).reduce((s, arr) => s + (arr?.length ?? 0), 0),
+      salaryRoleCount:     pw.salaryRoles.length,
+      paymentScheduleCount: pw.paymentSchedules.filter(ps => (ps.rows?.length ?? 0) > 0).length,
+      crossCheckMessage,
+    })
 
     onDone()
   }
@@ -448,6 +599,89 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
             </div>
           )}
         </div>
+
+        {/* ── Pre-population summary ──────────────────────────────────────────── */}
+        {(() => {
+          const checks: [string, string][] = [
+            ['Total Budget',     edit.totalBudget],
+            ['Currency',         edit.currency],
+            ['Production Title', edit.title],
+            ['Company',          edit.company],
+            ['Shoot Days',       edit.shootDays],
+            ['Start Date',       edit.startDate],
+            ['Production Fee %', edit.productionFeePercent],
+            ['Contingency %',    edit.contingencyPercent],
+            ['VAT Rate %',       edit.vatRate],
+            ['WHT Rate %',       edit.whtRate],
+            ['Dev Months',       edit.developmentMonths],
+            ['Pre-Prod Months',  edit.preProdMonths],
+            ['Shoot Months',     edit.shootMonths],
+            ['Post-Prod Months', edit.postMonths],
+          ]
+          const fieldsWill = checks.filter(([, v]) => !!v).map(([l]) => l)
+          const fieldsWont = checks.filter(([, v]) => !v).map(([l]) => l)
+
+          const activeType = typeOverride ?? detectedType
+          const docLabel   = BUDGET_DOC_TYPE_LABELS[activeType]
+          const tbDisplay  = edit.totalBudget
+            ? `${edit.currency || ''}${Number(edit.totalBudget).toLocaleString()}`
+            : '—'
+          const deptCount  = Object.keys(pw.deptAllocations).length +
+                             Object.keys(pw.deptAllocationsRaw).length
+          const psCount    = pw.paymentSchedules.filter(ps => (ps.rows?.length ?? 0) > 0).length
+
+          const statStyle: React.CSSProperties = { minWidth: 110 }
+          const statLabel: React.CSSProperties = { fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }
+          const statVal:   React.CSSProperties = { fontSize: 14, fontWeight: 700, color: 'var(--text)' }
+
+          return (
+            <div style={{ background: 'rgba(80,200,80,0.06)', border: '1px solid rgba(80,200,80,0.22)', borderRadius: 8, padding: '16px 18px', marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', marginBottom: 12 }}>What will be imported</div>
+
+              {/* Stats row */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 28px', marginBottom: 14 }}>
+                <div style={statStyle}><div style={statLabel}>Type</div><div style={{ ...statVal, fontSize: 12 }}>{docLabel}</div></div>
+                <div style={statStyle}><div style={statLabel}>Total Budget</div><div style={statVal}>{tbDisplay}</div></div>
+                <div style={statStyle}><div style={statLabel}>Line Items</div><div style={statVal}>{lineItemCount}</div></div>
+                <div style={statStyle}><div style={statLabel}>Salary Roles</div><div style={statVal}>{pw.salaryRoles.length}</div></div>
+                <div style={statStyle}><div style={statLabel}>Dept Allocations</div><div style={statVal}>{deptCount}</div></div>
+                <div style={statStyle}><div style={statLabel}>Pmt Schedules</div><div style={statVal}>{psCount}</div></div>
+              </div>
+
+              {/* Fields that will be populated */}
+              {fieldsWill.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>
+                    Assumption fields that will be set ({fieldsWill.length}):
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {fieldsWill.map(f => (
+                      <span key={f} style={{ fontSize: 11, fontWeight: 600, color: 'var(--green)', background: 'rgba(80,200,80,0.12)', padding: '2px 8px', borderRadius: 4 }}>
+                        ✓ {f}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Fields that won't be populated */}
+              {fieldsWont.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>
+                    Not detected — will be left blank ({fieldsWont.length}):
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {fieldsWont.map(f => (
+                      <span key={f} style={{ fontSize: 11, color: '#666', background: 'var(--bg2)', border: '1px solid var(--border)', padding: '2px 8px', borderRadius: 4 }}>
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         <SectionNav active={section} onChange={setSection} counts={sectionCounts} />
 
@@ -768,6 +1002,53 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
         onCancel={() => setShowWizard(false)}
       />
     )}
+
+    {/* Overwrite warning modal */}
+    {showOverwriteWarning && (() => {
+      const existingLineItems = DEPARTMENTS.reduce((s, d) => s + (store.lineItems[d.code]?.length ?? 0), 0)
+      const existingAssumptions = [
+        store.project.totalBudget > 0,
+        !!store.project.title,
+        !!store.project.company,
+        !!store.project.currency,
+        !!store.project.shootDays,
+        !!store.project.startDate,
+        !!store.project.productionFeePercent,
+      ].filter(Boolean).length
+      const existingSalaryRoles = store.salaryRoles.length
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, padding: '32px 36px', maxWidth: 480, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
+            <div style={{ fontSize: 28, marginBottom: 14 }}>⚠️</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>Overwrite existing data?</div>
+            <div style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.75, marginBottom: 24 }}>
+              This project already has data entered:
+              {existingLineItems > 0 && (
+                <><br />· <strong style={{ color: 'var(--text)' }}>{existingLineItems}</strong> line item{existingLineItems !== 1 ? 's' : ''}</>
+              )}
+              {existingSalaryRoles > 0 && (
+                <><br />· <strong style={{ color: 'var(--text)' }}>{existingSalaryRoles}</strong> salary role{existingSalaryRoles !== 1 ? 's' : ''} (will be merged, not replaced)</>
+              )}
+              {existingAssumptions > 0 && (
+                <><br />· <strong style={{ color: 'var(--text)' }}>{existingAssumptions}</strong> assumption field{existingAssumptions !== 1 ? 's' : ''}</>
+              )}
+              <br /><br />
+              Importing this workbook will <strong style={{ color: 'var(--text)' }}>replace</strong> existing line items and overwrite matching assumption fields. Previously entered data will be lost.
+            </div>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowOverwriteWarning(false)} style={S.btnGhost}>Cancel</button>
+              <button
+                onClick={() => { setShowOverwriteWarning(false); doCommit() }}
+                style={{ ...S.btnPrimary, background: '#c0392b', color: '#fff' }}
+              >
+                Yes, overwrite →
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    })()}
     </>
   )
 }

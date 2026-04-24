@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useBudgetStore, DEPARTMENTS, DeptCode, LineItem, getDeptTarget, getDeptActual } from '../store/budgetStore'
+import type { UploadAuditField } from '../store/budgetStore'
 
 let idCounter = 1000
 function newId() { return String(++idCounter) }
@@ -192,10 +193,80 @@ function DeptSection({ code }: { code: DeptCode }) {
   )
 }
 
+function UploadAuditPanel({ audit, onDismiss }: { audit: import('../store/budgetStore').UploadAudit; onDismiss: () => void }) {
+  const [collapsed, setCollapsed] = useState(false)
+  const populated = audit.fieldsPopulated.filter(f => f.populated)
+  const missing   = audit.fieldsPopulated.filter(f => !f.populated)
+
+  return (
+    <div style={{ marginBottom: 20, border: '1px solid rgba(78,159,255,0.35)', borderRadius: 10, background: 'rgba(78,159,255,0.06)', overflow: 'hidden' }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', cursor: 'pointer' }} onClick={() => setCollapsed(c => !c)}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#4e9fff' }}>📥 Upload Summary</span>
+        <span style={{ fontSize: 11, color: 'var(--text3)', flex: 1 }}>
+          {audit.fileName} · {new Date(audit.uploadedAt).toLocaleString()} · {audit.documentType}
+        </span>
+        {audit.crossCheckMessage && (
+          <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>⚠ Rounding note</span>
+        )}
+        <button onClick={e => { e.stopPropagation(); onDismiss() }} style={{ background: 'transparent', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+        <span style={{ fontSize: 11, color: 'var(--text3)' }}>{collapsed ? '▲' : '▼'}</span>
+      </div>
+
+      {!collapsed && (
+        <div style={{ padding: '0 16px 14px' }}>
+          {/* Stats row */}
+          <div style={{ display: 'flex', gap: 20, marginBottom: 14, flexWrap: 'wrap' }}>
+            {[
+              ['Total Budget', audit.totalBudgetDetected],
+              ['Line Items',   String(audit.lineItemCount)],
+              ['Salary Roles', String(audit.salaryRoleCount)],
+              ['Pmt Schedules',String(audit.paymentScheduleCount)],
+              ['Fields Set',   `${populated.length} of ${audit.fieldsPopulated.length}`],
+            ].map(([label, val]) => (
+              <div key={label} style={{ fontSize: 11 }}>
+                <div style={{ color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{label}</div>
+                <div style={{ fontWeight: 700, color: 'var(--text)' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Fields populated */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 24px', marginBottom: missing.length > 0 ? 10 : 0 }}>
+            {populated.map((f: UploadAuditField) => (
+              <div key={f.field} style={{ fontSize: 11, color: 'var(--text2)' }}>
+                <span style={{ color: '#4ec24e', marginRight: 4 }}>✓</span>{f.field}: <span style={{ color: 'var(--text)' }}>{f.value}</span>
+              </div>
+            ))}
+          </div>
+          {missing.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginBottom: 4, marginTop: 6 }}>Not found in file — left blank:</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {missing.map((f: UploadAuditField) => (
+                  <span key={f.field} style={{ fontSize: 10, padding: '2px 8px', background: 'rgba(128,128,128,0.12)', borderRadius: 3, color: 'var(--text3)' }}>{f.field}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Cross-check note */}
+          {audit.crossCheckMessage && (
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--accent)', background: 'rgba(245,166,35,0.08)', borderRadius: 6, padding: '8px 12px', lineHeight: 1.6 }}>
+              ℹ {audit.crossCheckMessage}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ProductionBudget() {
   const store = useBudgetStore()
   const [activeDept, setActiveDept] = useState<DeptCode | 'all'>('all')
   const [overBudgetDismissed, setOverBudgetDismissed] = useState(false)
+  const [auditDismissed, setAuditDismissed] = useState(false)
   const prevTotalRef = useRef(0)
   const cur = store.project.currency || 'N'
 
@@ -210,16 +281,20 @@ export default function ProductionBudget() {
   const grandTotal = subTotal + feeAmount
   const variance = grandTotal - grandTarget
 
-  const isOverBudget = grandTotal > grandTarget && grandTarget > 0
+  // Suppress during bulk upload — line items may be written before totalBudget is finalised
+  const isOverBudget = grandTotal > grandTarget && grandTarget > 0 && !store.isPopulatingFromUpload
   const overBy = grandTotal - grandTarget
 
   useEffect(() => {
     if (grandTotal <= grandTarget) setOverBudgetDismissed(false)
-    if (grandTotal > grandTarget && prevTotalRef.current <= grandTarget) {
+    if (grandTotal > grandTarget && prevTotalRef.current <= grandTarget && !store.isPopulatingFromUpload) {
       setOverBudgetDismissed(false)
     }
     prevTotalRef.current = grandTotal
-  }, [grandTotal, grandTarget])
+  }, [grandTotal, grandTarget, store.isPopulatingFromUpload])
+
+  // Reset audit dismissed state when a new audit arrives
+  useEffect(() => { if (store.lastUploadAudit) setAuditDismissed(false) }, [store.lastUploadAudit])
 
   // Dept II is auto-calculated; never shown as an editable section
   const editableDepts = DEPARTMENTS.filter(d => d.code !== 'II')
@@ -231,6 +306,17 @@ export default function ProductionBudget() {
         <div className="screen-title">Production Budget</div>
         <div className="screen-sub">Line-item budget per department. SCH.NO. auto-generates; edit freely. Click any rate/qty cell to edit.</div>
       </div>
+
+      {/* Upload audit panel — shown after a file import, dismissed per-session */}
+      {store.lastUploadAudit && !auditDismissed && (
+        <UploadAuditPanel
+          audit={store.lastUploadAudit}
+          onDismiss={() => {
+            setAuditDismissed(true)
+            store.setLastUploadAudit(null)
+          }}
+        />
+      )}
 
       <div className="summary-stats" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
         <div className="stat-card">
