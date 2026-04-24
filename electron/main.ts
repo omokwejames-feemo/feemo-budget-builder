@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell, Menu } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join, dirname } from 'path'
 import { writeFile as writeFileAsync, readFile as readFileAsync, unlink } from 'fs/promises'
@@ -425,6 +425,66 @@ function compareVersions(a: string, b: string): number {
   return 0
 }
 
+// ── Application menu ──────────────────────────────────────────────────────────
+
+function buildAppMenu() {
+  const isMac = process.platform === 'darwin'
+  const template: Electron.MenuItemConstructorOptions[] = [
+    // App menu (macOS only)
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'services' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const },
+      ],
+    }] : []),
+    // File menu
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Project (Fresh Start)',
+          accelerator: 'CommandOrControl+Shift+N',
+          click: () => { mainWindow?.webContents.send('new-project-fresh') },
+        },
+        { type: 'separator' as const },
+        isMac ? { role: 'close' as const } : { role: 'quit' as const },
+      ],
+    },
+    // Edit menu
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' as const },
+        { role: 'redo' as const },
+        { type: 'separator' as const },
+        { role: 'cut' as const },
+        { role: 'copy' as const },
+        { role: 'paste' as const },
+        { role: 'selectAll' as const },
+      ],
+    },
+    // View menu
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' as const },
+        { role: 'toggleDevTools' as const },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const },
+      ],
+    },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 // ── Window ────────────────────────────────────────────────────────────────────
 
 function createWindow() {
@@ -798,7 +858,7 @@ ipcMain.handle('gdrive-upload', async (_event, { data, fileName }: { data: strin
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => { createWindow(); buildAppMenu() })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

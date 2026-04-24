@@ -77,6 +77,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openXlsxBudget: () =>
     ipcRenderer.invoke('open-xlsx-budget'),
 
+  // ── In-app fresh start (File > New Project / Cmd+Shift+N) ────────────────
+  onNewProjectFresh: (cb: () => void) => {
+    ipcRenderer.removeAllListeners('new-project-fresh')
+    ipcRenderer.on('new-project-fresh', () => cb())
+  },
+
   // ── Google Drive ─────────────────────────────────────────────────────────
   gdriveSetCredentials: (clientId: string, clientSecret: string) =>
     ipcRenderer.invoke('gdrive-set-credentials', { clientId, clientSecret }),

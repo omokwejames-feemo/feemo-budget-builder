@@ -1,24 +1,19 @@
-// Intelligent multi-sheet workbook parser — Fix Batch 8
+// Intelligent multi-sheet workbook parser — Fix Batch 8 + 9
 // Scans every sheet in a workbook, classifies by content type, runs
 // type-specific parsers, scores confidence, and flags cross-sheet conflicts.
 
 import ExcelJS from 'exceljs'
 import type { DeptCode, LineItem, SalaryRole, PaymentSchedule, PaymentScheduleRow } from '../store/budgetStore'
 import { DEPARTMENTS } from '../store/budgetStore'
+import { SHEET_KEYWORDS, DEPT_ALIASES, COL_HEADER_PATTERNS } from './keywords'
+export type { SheetType, BudgetDocumentType } from './keywords'
+import type { SheetType, BudgetDocumentType } from './keywords'
+import { BUDGET_DOC_TYPE_LABELS } from './keywords'
+export { BUDGET_DOC_TYPE_LABELS }
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export type Confidence = 'high' | 'medium' | 'low'
-
-export type SheetType =
-  | 'budget-summary'
-  | 'salary-forecast'
-  | 'production-forecast'
-  | 'production-timeline'
-  | 'payment-schedule'
-  | 'assumptions'
-  | 'dept-allocations'
-  | 'unknown'
 
 export interface ScoredField<T> {
   value: T
@@ -79,47 +74,16 @@ export interface ParsedWorkbook {
   conflicts: ParsedConflict[]
   sheets: SheetClassification[]
   warnings: string[]
+
+  // Document-level classification (added in Fix Batch 9)
+  documentType: BudgetDocumentType
+  matchStats: {
+    lineItemTotal: number   // total line items extracted across all sheets
+    deptCoverage: number   // 0–1 fraction of departments that have any data
+  }
 }
 
-// ─── Keyword dictionaries ─────────────────────────────────────────────────────
-
-const SHEET_KEYWORDS: Record<SheetType, string[]> = {
-  'budget-summary': [
-    'budget', 'production budget', 'line item', 'sch no', 'sched no', 'schedule no',
-    'detail', 'allocated', 'qty', 'unit', 'department', 'code', 'below the line',
-    'grand total', 'total budget', 'ie', 'i e', 'above the line',
-  ],
-  'salary-forecast': [
-    'salary', 'payroll', 'crew', 'cast', 'personnel', 'role', 'position', 'name',
-    'daily rate', 'weekly rate', 'flat fee', 'gross', 'net', 'paye', 'tax',
-    'monthly salary', 'days', 'weeks', 'shoot days', 'fee',
-  ],
-  'production-forecast': [
-    'forecast', 'cashflow', 'cash flow', 'monthly', 'drawdown', 'period',
-    'cumulative', 'running total', 'projection', 'installment', 'disbursement',
-    'month 1', 'month 2', 'month 3',
-  ],
-  'production-timeline': [
-    'timeline', 'gantt', 'phase', 'milestone', 'start date', 'end date',
-    'duration', 'weeks', 'pre-production', 'principal photography', 'post-production',
-    'development', 'delivery', 'wrap', 'schedule',
-  ],
-  'payment-schedule': [
-    'payment schedule', 'payee', 'amount payable', 'account number', 'bank',
-    'wht', 'vat', 'net payable', 'invoice', 'prepared by', 'approved by',
-    'ps-', 'payment no', 'beneficiary', 'gross payment',
-  ],
-  'assumptions': [
-    'assumption', 'production fee', 'contingency', 'vat rate', 'wht rate',
-    'currency', 'overhead', 'insurance', 'completion bond', 'exchange rate',
-    'percentage', 'rate %', 'project details', 'total budget',
-  ],
-  'dept-allocations': [
-    'department', 'allocation', 'breakdown', 'total per department', 'dept',
-    'percentage', 'split', 'budget breakdown', 'dept %',
-  ],
-  'unknown': [],
-}
+// SHEET_KEYWORDS and DEPT_ALIASES are imported from ./keywords (Fix Batch 9)
 
 // ─── Cell helpers ─────────────────────────────────────────────────────────────
 
@@ -167,36 +131,6 @@ let _seq = 20000
 const uid = () => `up_${++_seq}`
 
 // ─── Department matching ──────────────────────────────────────────────────────
-
-const DEPT_ALIASES: Partial<Record<DeptCode, string[]>> = {
-  A:  ['research', 'development', 'r&d', 'r & d'],
-  B:  ['script', 'writer', 'screenplay', 'writing'],
-  C:  ['producer', 'production manager', 'prod manager', 'line producer'],
-  D:  ['director', 'dop', 'director of photography'],
-  E:  ['cast', 'talent', 'actor', 'actress', 'presenter', 'artiste'],
-  F:  ['production staff', 'general crew', 'runner', 'coordinator'],
-  G:  ['camera', 'cam dept', 'grip', 'focus puller'],
-  H:  ['sound', 'audio', 'boom'],
-  I:  ['lighting', 'light', 'electrical', 'gaffer', 'spark'],
-  J:  ['art dept', 'art direction', 'set design', 'production design'],
-  K:  ['set', 'set build', 'construction'],
-  L:  ['props', 'properties'],
-  M:  ['wardrobe', 'costume', 'stylist'],
-  N:  ['makeup', 'make-up', 'hair', 'sfx makeup', 'mua'],
-  O:  ['picture vehicle', 'featured vehicle'],
-  P:  ['studio', 'facility', 'ob van', 'ob facility'],
-  Q:  ['location', 'location fee', 'scout'],
-  R:  ['vehicle', 'transport', 'logistics', 'driver'],
-  S:  ['travel', 'flight', 'airfare', 'per diem travel'],
-  T:  ['accommodation', 'hotel', 'meal', 'per diem', 'catering', 'feeding'],
-  AA: ['stock', 'media', 'tape', 'card', 'raw stock'],
-  DD: ['graphic', 'motion graphic', 'title', 'animation'],
-  EE: ['music', 'composer', 'soundtrack', 'score'],
-  FF: ['post', 'edit', 'colour', 'color', 'grade', 'mix', 'vfx', 'visual effect', 'online', 'delivery', 'post-production', 'post production'],
-  GG: ['overhead', 'office', 'admin', 'overheads'],
-  HH: ['insurance', 'bond', 'completion bond'],
-  II: ['contingency', 'production fee', 'reserve', 'management fee'],
-}
 
 function matchDept(text: string): DeptCode | null {
   if (!text || !text.trim()) return null
@@ -415,11 +349,36 @@ function parseAssumptionsSheet(ws: ExcelJS.Worksheet, sheetName: string): Partia
   return r
 }
 
+// ─── Dynamic column map detection ────────────────────────────────────────────
+
+interface BudgetColMap { detail: number; qty: number; rate: number; unit: number; total: number }
+
+function detectBudgetColMap(ws: ExcelJS.Worksheet): BudgetColMap {
+  const defaults: BudgetColMap = { detail: 1, qty: 2, rate: 3, unit: 4, total: -1 }
+  for (let rn = 1; rn <= 8; rn++) {
+    const texts = denseTexts(ws.getRow(rn), 16).map(t => norm(t))
+    let hits = 0
+    const map: Partial<BudgetColMap> = {}
+    for (let i = 0; i < texts.length; i++) {
+      const t = texts[i]
+      if (!t) continue
+      if (COL_HEADER_PATTERNS.detail.test(t) && map.detail === undefined)  { map.detail = i; hits++ }
+      if (COL_HEADER_PATTERNS.qty.test(t) && map.qty === undefined)        { map.qty = i; hits++ }
+      if (COL_HEADER_PATTERNS.rate.test(t) && map.rate === undefined)      { map.rate = i; hits++ }
+      if (COL_HEADER_PATTERNS.unit.test(t) && map.unit === undefined)      { map.unit = i }
+      if (COL_HEADER_PATTERNS.total.test(t) && map.total === undefined)    { map.total = i }
+    }
+    if (hits >= 2) return { ...defaults, ...map }
+  }
+  return defaults
+}
+
 // ─── Budget summary parser ────────────────────────────────────────────────────
 
 function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
   const r: Partial<ParsedWorkbook> = { lineItems: {}, deptAllocations: {} }
   let currentDept: DeptCode | null = null
+  const colMap = detectBudgetColMap(ws)
 
   ws.eachRow((row, rowNum) => {
     const texts = denseTexts(row, 12)
@@ -493,11 +452,14 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
     const largeNums = positiveNums.filter(n => n > 10)
     if (!largeNums.length) return
 
-    const total = Math.max(...largeNums)
+    // Use detected column map — fall back to largest number for total
+    const total = colMap.total >= 0 && nums[colMap.total] !== null
+      ? (nums[colMap.total] as number)
+      : Math.max(...largeNums)
     const schedNo = col1.length > 0 && col1.length <= 6 && !/^[a-z]/i.test(col1) ? col1 : ''
-    const qty = (nums[2] ?? nums[3] ?? null) as number | null
-    const rate = (nums[3] ?? nums[4] ?? null) as number | null
-    const unit = (texts[4] || texts[5] || 'Flat').slice(0, 20)
+    const qty = (nums[colMap.qty] ?? nums[colMap.qty + 1] ?? null) as number | null
+    const rate = (nums[colMap.rate] ?? nums[colMap.rate + 1] ?? null) as number | null
+    const unit = (texts[colMap.unit] || texts[colMap.unit + 1] || 'Flat').slice(0, 20)
 
     const effectiveRate = (rate && rate > 0 && rate !== total) ? rate : total
     const effectiveQty = (qty && qty > 0 && qty < 5000 && qty !== total) ? qty : 1
@@ -807,6 +769,8 @@ function mergeResults(parts: Partial<ParsedWorkbook>[], sheets: SheetClassificat
     deptAllocations: {}, deptAllocationsRaw: {},
     lineItems: {}, salaryRoles: [], paymentSchedules: [], forecastRows: [],
     conflicts: [], sheets, warnings: [],
+    documentType: 'unknown',
+    matchStats: { lineItemTotal: 0, deptCoverage: 0 },
   }
 
   for (const key of SCALAR_KEYS) {
@@ -882,6 +846,37 @@ function detectConflicts(result: ParsedWorkbook): void {
   result.conflicts = conflicts
 }
 
+// ─── Document type detection ──────────────────────────────────────────────────
+
+function detectDocumentType(result: ParsedWorkbook): BudgetDocumentType {
+  const types = result.sheets.map(s => s.type).filter(t => t !== 'unknown') as Exclude<SheetType, 'unknown'>[]
+  const has = (t: Exclude<SheetType, 'unknown'>) => types.includes(t)
+
+  const hasBudget   = has('budget-summary')
+  const hasForecast = has('production-forecast')
+  const hasSalary   = has('salary-forecast')
+  const hasDeptOnly = has('dept-allocations') || has('assumptions')
+  const lineTotal   = result.matchStats.lineItemTotal
+
+  // Full production budget: has a budget-summary sheet with extracted line items
+  if (hasBudget && lineTotal > 0) return 'full-production-budget'
+
+  // Budget sheet present but no line items extracted → dept summary level
+  if (hasBudget && lineTotal === 0) {
+    const mainTypes = [hasForecast, hasSalary].filter(Boolean).length
+    if (mainTypes >= 1) return 'mixed'
+    return 'dept-summary'
+  }
+
+  // No budget-summary sheet
+  const mainTypes = [hasForecast, hasSalary].filter(Boolean).length
+  if (mainTypes >= 2) return 'mixed'
+  if (hasForecast) return 'production-forecast'
+  if (hasSalary) return 'salary-forecast'
+  if (hasDeptOnly) return 'dept-summary'
+  return 'unknown'
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedWorkbook> {
@@ -922,6 +917,19 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedWork
     )
   }
 
+  // Compute match stats before type detection
+  const lineItemTotal = Object.values(result.lineItems).reduce((s, arr) => s + (arr?.length ?? 0), 0)
+  const deptsWithData = DEPARTMENTS.filter(d =>
+    (result.lineItems[d.code]?.length ?? 0) > 0 ||
+    result.deptAllocations[d.code] !== undefined ||
+    result.deptAllocationsRaw[d.code] !== undefined
+  ).length
+  result.matchStats = {
+    lineItemTotal,
+    deptCoverage: deptsWithData / DEPARTMENTS.length,
+  }
+
+  result.documentType = detectDocumentType(result)
   detectConflicts(result)
   return result
 }

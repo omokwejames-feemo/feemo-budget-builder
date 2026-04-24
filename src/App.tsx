@@ -51,6 +51,7 @@ export default function App() {
   const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null)
   const [saveToast, setSaveToast] = useState(false)
   const [showOpenDialog, setShowOpenDialog] = useState(false)
+  const [showFreshStartConfirm, setShowFreshStartConfirm] = useState(false)
 
   const store = useBudgetStore()
   const isFirstMount = useRef(true)
@@ -115,11 +116,20 @@ export default function App() {
         e.preventDefault()
         handleSave()
       }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
+        e.preventDefault()
+        setShowFreshStartConfirm(true)
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appView])
+
+  // Listen for "New Project (Fresh Start)" from the native File menu
+  useEffect(() => {
+    window.electronAPI?.onNewProjectFresh(() => setShowFreshStartConfirm(true))
+  }, [])
 
   function getSerializableState() {
     const s = useBudgetStore.getState()
@@ -144,6 +154,16 @@ export default function App() {
     isFirstMount.current = true
     setScreen('assumptions')
     setAppView('app')
+  }
+
+  function doFreshStart() {
+    store.resetStore()
+    setCurrentFilePath(null)
+    setHasUnsavedChanges(false)
+    isFirstMount.current = true
+    setScreen('assumptions')
+    setAppView('app')
+    setShowFreshStartConfirm(false)
   }
 
   function handleOpenProject() {
@@ -286,26 +306,68 @@ export default function App() {
     )
   }
 
+  // Fresh-start dialog rendered as a floating overlay regardless of current view
+  const freshStartDialog = showFreshStartConfirm ? (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 14, padding: '36px 40px', maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', textAlign: 'center' }}>
+        <div style={{ fontSize: 32, marginBottom: 14 }}>🗂</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 8 }}>New Project (Fresh Start)</div>
+        <p style={{ fontSize: 13, color: '#888', lineHeight: 1.7, marginBottom: 28 }}>
+          Starting a new project will close the current project.
+          {hasUnsavedChanges ? ' You have unsaved changes — save before continuing?' : ' Any unsaved changes will be lost.'}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {hasUnsavedChanges && (
+            <button
+              onClick={async () => { await handleSave(); doFreshStart() }}
+              style={{ width: '100%', padding: '12px 0', background: '#f5a623', color: '#000', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}
+            >
+              Save &amp; Start New Project
+            </button>
+          )}
+          <button
+            onClick={doFreshStart}
+            style={{ width: '100%', padding: '12px 0', background: hasUnsavedChanges ? 'transparent' : '#f5a623', color: hasUnsavedChanges ? '#cc4444' : '#000', fontWeight: 700, fontSize: 14, border: hasUnsavedChanges ? '1px solid #cc4444' : 'none', borderRadius: 8, cursor: 'pointer' }}
+          >
+            {hasUnsavedChanges ? "Don't Save — Start Anyway" : 'Start New Project'}
+          </button>
+          <button
+            onClick={() => setShowFreshStartConfirm(false)}
+            style={{ width: '100%', padding: '12px 0', background: 'transparent', color: '#666', fontWeight: 600, fontSize: 14, border: '1px solid #333', borderRadius: 8, cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   if (appView === 'rebuild') {
     return (
-      <RebuildFromFiles onRebuilt={() => {
-        setScreen('assumptions')
-        setAppView('app')
-        isFirstMount.current = true
-      }} />
+      <>
+        <RebuildFromFiles onRebuilt={() => {
+          setScreen('assumptions')
+          setAppView('app')
+          isFirstMount.current = true
+        }} />
+        {freshStartDialog}
+      </>
     )
   }
 
   if (appView === 'upload') {
     return (
-      <BudgetUploadScreen
-        onDone={() => {
-          setScreen('assumptions')
-          setAppView('app')
-          isFirstMount.current = true
-        }}
-        onCancel={() => setAppView('home')}
-      />
+      <>
+        <BudgetUploadScreen
+          onDone={() => {
+            setScreen('assumptions')
+            setAppView('app')
+            isFirstMount.current = true
+          }}
+          onCancel={() => setAppView('home')}
+        />
+        {freshStartDialog}
+      </>
     )
   }
 
@@ -325,6 +387,7 @@ export default function App() {
         {pendingUpdate && (
           <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
         )}
+        {freshStartDialog}
       </>
     )
   }
@@ -432,6 +495,9 @@ export default function App() {
       {pendingUpdate && (
         <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
       )}
+
+      {/* Fresh Start dialog (shared overlay — also rendered in home/rebuild/upload views) */}
+      {freshStartDialog}
 
       {/* Quick-save toast */}
       {saveToast && (

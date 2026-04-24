@@ -1,6 +1,6 @@
-// Budget Upload Screen — Fix Batch 8
-// Multi-sheet aware confirmation UI. Organised by section with confidence
-// badges, conflict resolution, and a single commit pass.
+// Budget Upload Screen — Fix Batch 8 + 9
+// Multi-sheet aware confirmation UI with budget type detection banner,
+// population routing per type, and wizard trigger for sparse documents.
 
 import { useState, useEffect } from 'react'
 import {
@@ -11,8 +11,11 @@ import {
   SheetType,
   Confidence,
   ScoredField,
+  BudgetDocumentType,
+  BUDGET_DOC_TYPE_LABELS,
 } from '../utils/budgetParser'
 import { useBudgetStore, DEPARTMENTS, DeptCode } from '../store/budgetStore'
+import BudgetWizard, { WizardExtras } from '../components/BudgetWizard'
 
 interface Props { onDone: () => void; onCancel: () => void }
 
@@ -177,6 +180,10 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const [edit, setEdit] = useState<EditState | null>(null)
   const [conflicts, setConflicts] = useState<ParsedConflict[]>([])
   const [section, setSection] = useState<Section>('summary')
+  const [detectedType, setDetectedType] = useState<BudgetDocumentType>('unknown')
+  const [typeOverride, setTypeOverride] = useState<BudgetDocumentType | null>(null)
+  const [showWizard, setShowWizard] = useState(false)
+  const [wizardExtras, setWizardExtras] = useState<WizardExtras | null>(null)
 
   useEffect(() => { handleUpload() }, [])
 
@@ -191,12 +198,17 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
       setPw(result)
       setEdit(toEditState(result))
       setConflicts(result.conflicts.map(c => ({ ...c, chosenSource: null })))
+      setDetectedType(result.documentType)
 
       // Jump straight to conflicts tab if there are any
       if (result.conflicts.length > 0) setSection('conflicts')
       else setSection('summary')
 
       setStage('confirm')
+
+      // Auto-launch wizard for sparse/summary documents
+      const isSparse = result.documentType === 'dept-summary' || result.matchStats.deptCoverage < 0.6
+      if (isSparse) setShowWizard(true)
     } catch (err) {
       setParseError(String(err))
       setStage('error')
@@ -211,6 +223,12 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   }
   function resolveConflict(field: string, sheet: string) {
     setConflicts(prev => prev.map(c => c.field === field ? { ...c, chosenSource: sheet } : c))
+  }
+
+  function handleWizardComplete(updatedEdit: EditState, extras: WizardExtras) {
+    setEdit(updatedEdit)
+    setWizardExtras(extras)
+    setShowWizard(false)
   }
 
   function handleCommit() {
@@ -272,6 +290,26 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
       if (!row.deptCode) continue
       for (const [month, value] of Object.entries(row.monthlyValues)) {
         if (value > 0) store.setForecastOverride(`${row.deptCode}_${month}`, value)
+      }
+    }
+
+    // ── Wizard extras (format, installments, location) ────────────────────────
+    if (wizardExtras) {
+      store.setProject({
+        format: wizardExtras.format || undefined,
+        episodes: wizardExtras.episodes || undefined,
+        episodeDuration: wizardExtras.episodeDuration || undefined,
+        location: wizardExtras.location || undefined,
+        shootDays: wizardExtras.shootDays || undefined,
+      })
+      if (wizardExtras.installments.length > 0) {
+        store.setInstallments(wizardExtras.installments.map((inst, i) => ({
+          id: `wiz_${i}`,
+          label: `Installment ${i + 1}`,
+          percentage: inst.pct,
+          trigger: '',
+          month: inst.month,
+        })))
       }
     }
 
@@ -348,6 +386,7 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const deptAllocCount  = Object.keys(pw.deptAllocations).length + Object.keys(pw.deptAllocationsRaw).length
 
   return (
+    <>
     <div style={S.page}>
       <div style={S.wrap}>
 
@@ -359,6 +398,46 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
             {conflicts.length > 0 && <span style={{ color: 'var(--accent)', fontWeight: 600 }}> · {conflicts.length} conflict{conflicts.length > 1 ? 's' : ''} to resolve</span>}
             {pw.warnings.length > 0 && <span style={{ color: '#888' }}> · {pw.warnings.length} warning{pw.warnings.length > 1 ? 's' : ''}</span>}
           </div>
+
+          {/* Document type detection banner */}
+          {(() => {
+            const activeType = typeOverride ?? detectedType
+            const docLabel = BUDGET_DOC_TYPE_LABELS[activeType]
+            const isSparse = activeType === 'dept-summary' || pw.matchStats.deptCoverage < 0.6
+            const allTypes: BudgetDocumentType[] = [
+              'full-production-budget', 'production-forecast', 'salary-forecast',
+              'dept-summary', 'mixed', 'unknown',
+            ]
+            return (
+              <div style={{ background: 'rgba(78,159,255,0.08)', border: '1px solid rgba(78,159,255,0.25)', borderRadius: 8, padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: '#4e9fff', fontWeight: 600 }}>
+                  Detected: {docLabel}
+                </span>
+                <select
+                  value={typeOverride ?? detectedType}
+                  onChange={e => setTypeOverride(e.target.value as BudgetDocumentType)}
+                  style={{ fontSize: 11, padding: '4px 8px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text3)', fontFamily: 'inherit' }}
+                >
+                  {allTypes.map(t => (
+                    <option key={t} value={t}>{BUDGET_DOC_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+                {isSparse && !showWizard && (
+                  <button
+                    onClick={() => setShowWizard(true)}
+                    style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                  >
+                    Open Budget Wizard
+                  </button>
+                )}
+                {isSparse && (
+                  <span style={{ fontSize: 11, color: '#888' }}>
+                    Sparse document — wizard recommended to fill in missing fields
+                  </span>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Warnings strip */}
           {pw.warnings.length > 0 && (
@@ -671,6 +750,7 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
           >
             Edit Details
           </button>
+          <button onClick={() => setShowWizard(true)} style={S.btnGhost}>Run Wizard</button>
           <button onClick={handleCommit} style={S.btnPrimary}>
             Load into Project →
           </button>
@@ -678,5 +758,16 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
 
       </div>
     </div>
+
+    {/* Budget Wizard modal */}
+    {showWizard && edit && pw && (
+      <BudgetWizard
+        initialEdit={edit}
+        parsedWorkbook={pw}
+        onComplete={handleWizardComplete}
+        onCancel={() => setShowWizard(false)}
+      />
+    )}
+    </>
   )
 }

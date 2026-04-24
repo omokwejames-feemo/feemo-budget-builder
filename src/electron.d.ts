@@ -40,6 +40,8 @@ declare global {
       betaCheckSession: (key: string, email: string) => Promise<{ valid: boolean; expiresAt?: number | null }>
       // Budget upload
       openXlsxBudget: () => Promise<{ success: boolean; filePath?: string; buffer?: number[] }>
+      // In-app fresh start
+      onNewProjectFresh: (cb: () => void) => void
     }
   }
 }
