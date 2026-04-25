@@ -1,16 +1,11 @@
-// Three-part date picker — Batch 14 / S6.2
-// Replaces the single <input type="month"> with three separate selectors:
-// [Month dropdown] [Day numeric input] [Year numeric input]
-// Stores and emits an ISO YYYY-MM-DD string (or YYYY-MM when day is omitted).
-
-import { useMemo } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Props {
   label: string
   value: string                 // YYYY-MM-DD or YYYY-MM accepted
   onChange: (v: string) => void
   hint?: string
-  requireDay?: boolean          // default false — day input shown but optional
+  requireDay?: boolean
 }
 
 const MONTHS = [
@@ -32,6 +27,7 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box',
   fontFamily: 'inherit',
+  width: '100%',
 }
 
 const labelStyle: React.CSSProperties = {
@@ -45,43 +41,55 @@ const labelStyle: React.CSSProperties = {
 }
 
 export default function DatePicker({ label, value, onChange, hint }: Props) {
-  // Parse existing value (supports YYYY-MM-DD and YYYY-MM)
-  const parsed = useMemo(() => {
-    if (!value) return { year: '', month: '', day: '' }
+  // Local state — each field is independent so partial entry doesn't clear the other
+  const [year, setYear]   = useState('')
+  const [month, setMonth] = useState('')
+  const [day, setDay]     = useState('')
+
+  // Initialise / sync when an external value is loaded (e.g. file open)
+  useEffect(() => {
+    if (!value) return  // don't wipe local fields while user is still typing
     const parts = value.split('-')
-    return {
-      year:  parts[0] ?? '',
-      month: parts[1] ?? '',
-      day:   parts[2] ?? '',
-    }
+    if (parts[0]) setYear(parts[0])
+    if (parts[1]) setMonth(parts[1])
+    if (parts[2]) setDay(parts[2])
   }, [value])
 
-  const yearNum  = parseInt(parsed.year)  || new Date().getFullYear()
-  const monthNum = parseInt(parsed.month) || 1
-  const maxDay   = daysInMonth(yearNum, monthNum)
-
-  function emit(year: string, month: string, day: string) {
-    if (!year || !month) { onChange(''); return }
-    const y = year.padStart(4, '0')
-    const m = month.padStart(2, '0')
-    if (day) {
-      const clampedDay = Math.min(parseInt(day) || 1, daysInMonth(parseInt(y), parseInt(m)))
-      onChange(`${y}-${m}-${String(clampedDay).padStart(2, '0')}`)
+  // Emit only when we have a fully-typed 4-digit year AND a month
+  function tryEmit(y: string, m: string, d: string) {
+    if (y.length !== 4 || !m) return
+    const yn = parseInt(y)
+    const mn = parseInt(m)
+    if (isNaN(yn) || isNaN(mn)) return
+    const yStr = y.padStart(4, '0')
+    const mStr = m.padStart(2, '0')
+    if (d) {
+      const maxD = daysInMonth(yn, mn)
+      const clamped = Math.min(parseInt(d) || 1, maxD)
+      onChange(`${yStr}-${mStr}-${String(clamped).padStart(2, '0')}`)
     } else {
-      onChange(`${y}-${m}`)
+      onChange(`${yStr}-${mStr}`)
     }
   }
 
-  function onMonthChange(m: string) { emit(parsed.year, m, parsed.day) }
-  function onDayChange(d: string)   {
-    const n = parseInt(d)
-    if (d !== '' && (isNaN(n) || n < 1 || n > maxDay)) return
-    emit(parsed.year, parsed.month, d)
+  function handleMonth(m: string) {
+    setMonth(m)
+    tryEmit(year, m, day)
   }
-  function onYearChange(y: string) {
-    const n = parseInt(y)
-    if (y !== '' && isNaN(n)) return
-    emit(y, parsed.month, parsed.day)
+
+  function handleDay(d: string) {
+    const maxD = daysInMonth(parseInt(year) || new Date().getFullYear(), parseInt(month) || 1)
+    const n = parseInt(d)
+    if (d !== '' && (isNaN(n) || n < 1 || n > maxD)) return
+    setDay(d)
+    tryEmit(year, month, d)
+  }
+
+  function handleYear(y: string) {
+    // Allow typing digits freely; only block non-numeric
+    if (y !== '' && !/^\d{0,4}$/.test(y)) return
+    setYear(y)
+    tryEmit(y, month, day)
   }
 
   return (
@@ -90,9 +98,9 @@ export default function DatePicker({ label, value, onChange, hint }: Props) {
       <div style={{ display: 'flex', gap: 8 }}>
         {/* Month dropdown */}
         <select
-          value={parsed.month}
-          onChange={e => onMonthChange(e.target.value)}
-          style={{ ...inputStyle, flex: 2, minWidth: 0 }}
+          value={month}
+          onChange={e => handleMonth(e.target.value)}
+          style={{ ...inputStyle, flex: 2 }}
         >
           <option value="">Month</option>
           {MONTHS.map((name, idx) => (
@@ -100,26 +108,26 @@ export default function DatePicker({ label, value, onChange, hint }: Props) {
           ))}
         </select>
 
-        {/* Day input */}
+        {/* Day input — optional */}
         <input
           type="number"
           min={1}
-          max={maxDay}
-          value={parsed.day}
-          onChange={e => onDayChange(e.target.value)}
+          max={31}
+          value={day}
+          onChange={e => handleDay(e.target.value)}
           placeholder="Day"
-          style={{ ...inputStyle, flex: 1, minWidth: 0, textAlign: 'center' }}
+          style={{ ...inputStyle, flex: 1, textAlign: 'center' }}
         />
 
-        {/* Year input */}
+        {/* Year — free text, 4 digits */}
         <input
-          type="number"
-          min={2000}
-          max={2099}
-          value={parsed.year}
-          onChange={e => onYearChange(e.target.value)}
-          placeholder="Year"
-          style={{ ...inputStyle, flex: 1, minWidth: 0, textAlign: 'center' }}
+          type="text"
+          inputMode="numeric"
+          maxLength={4}
+          value={year}
+          onChange={e => handleYear(e.target.value)}
+          placeholder="YYYY"
+          style={{ ...inputStyle, flex: 1, textAlign: 'center' }}
         />
       </div>
       {hint && (
