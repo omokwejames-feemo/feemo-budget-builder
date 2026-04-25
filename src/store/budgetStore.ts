@@ -181,6 +181,10 @@ export interface BudgetState {
   // ── Session-only (not persisted) ──────────────────────────────────────────
   isPopulatingFromUpload: boolean   // suppresses validation during bulk import
   lastUploadAudit: UploadAudit | null
+  budgetIntegrityStatus: 'ok' | 'mismatch' | 'unchecked'
+  lastIntegrityCheck: string | null
+  integrityDiscrepancy: number      // raw NGN diff; positive = Forecast over Budget
+  integritySourceDepartment: string | null
 
   setProject: (p: Partial<ProjectDetails>) => void
   setTimeline: (t: Partial<Timeline>) => void
@@ -206,6 +210,7 @@ export interface BudgetState {
   setForecastLocked: (locked: boolean) => void
   setIsPopulatingFromUpload: (v: boolean) => void
   setLastUploadAudit: (audit: UploadAudit | null) => void
+  setBudgetIntegrity: (status: 'ok' | 'mismatch' | 'unchecked', discrepancy: number, sourceDept: string | null) => void
   addNotice: (notice: Omit<AppNotice, 'id' | 'timestamp' | 'dismissed'>) => void
   dismissNotice: (id: string) => void
   clearAllNotices: () => void
@@ -272,6 +277,10 @@ const initialState = {
   // Session-only (always reset on app start / resetStore)
   isPopulatingFromUpload: false,
   lastUploadAudit: null as UploadAudit | null,
+  budgetIntegrityStatus: 'unchecked' as 'ok' | 'mismatch' | 'unchecked',
+  lastIntegrityCheck: null as string | null,
+  integrityDiscrepancy: 0,
+  integritySourceDepartment: null as string | null,
 }
 
 export const useBudgetStore = create<BudgetState>()(
@@ -325,6 +334,12 @@ export const useBudgetStore = create<BudgetState>()(
       setForecastLocked: (locked) => set({ forecastLocked: locked }),
       setIsPopulatingFromUpload: (v) => set({ isPopulatingFromUpload: v }),
       setLastUploadAudit: (audit) => set({ lastUploadAudit: audit }),
+      setBudgetIntegrity: (status, discrepancy, sourceDept) => set({
+        budgetIntegrityStatus: status,
+        lastIntegrityCheck: new Date().toISOString(),
+        integrityDiscrepancy: discrepancy,
+        integritySourceDepartment: sourceDept,
+      }),
       addNotice: (notice) => set(s => ({
         notices: [...s.notices, {
           ...notice,

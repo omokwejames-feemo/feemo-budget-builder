@@ -8,6 +8,8 @@ import {
 } from '../store/budgetStore'
 import { JURIYA_FULL, BC_FULL } from '../export/templateData'
 import { applyFullTemplate, applyParsedBudget } from '../export/applyTemplate'
+import { formatPercent } from '../utils/formatPercent'
+import DatePicker from '../components/DatePicker'
 import { parseUploadedBudget } from '../export/parseUploadedBudget'
 import { Issue } from '../hooks/useIssueDetector'
 import { formatCurrency } from '../utils/formatCurrency'
@@ -541,8 +543,12 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
               <input value={project.location} onChange={e => setProject({ location: e.target.value })} placeholder="e.g. Lagos" />
             </div>
             <div className="field">
-              <label>Production Start Date *</label>
-              <input type="month" value={project.startDate} onChange={e => setProject({ startDate: e.target.value })} />
+              <DatePicker
+                label="Production Start Date *"
+                value={project.startDate}
+                onChange={v => setProject({ startDate: v })}
+                hint="Month production begins (pre-production start)"
+              />
             </div>
           </div>
         </div>
@@ -698,9 +704,9 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
           </div>
           <div className="total-bar">
             <span className="total-bar-label">Total allocated:</span>
-            <span className={`total-bar-pct ${pctClass}`}>{totalPct.toFixed(1)}%</span>
+            <span className={`total-bar-pct ${pctClass}`}>{formatPercent(totalPct)}</span>
             {pctClass === 'over' && <span style={{ color: 'var(--red)', fontSize: 12 }}>⚠ Over 100%</span>}
-            {pctClass === 'under' && totalPct > 0 && <span style={{ color: 'var(--accent)', fontSize: 12 }}>{(100 - totalPct).toFixed(1)}% unallocated</span>}
+            {pctClass === 'under' && totalPct > 0 && <span style={{ color: 'var(--accent)', fontSize: 12 }}>{formatPercent(100 - totalPct)} unallocated</span>}
             {pctClass === 'ok' && <span style={{ color: 'var(--green)', fontSize: 12 }}>✓ Fully allocated</span>}
             <span style={{ marginLeft: 'auto', color: 'var(--text2)', fontSize: 12 }}>
               Allocated: <strong style={{ color: 'var(--text)' }}>{fmt((totalPct / 100) * project.totalBudget, project.currency)}</strong>

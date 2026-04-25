@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useBudgetStore, DEPARTMENTS, ExpenditureDeduction } from '../store/budgetStore'
 import { getDeptTarget } from '../store/budgetStore'
 import { formatAmount } from '../utils/formatCurrency'
+import { formatPercent } from '../utils/formatPercent'
 
 function fmt(n: number) {
   return formatAmount(n)
@@ -311,7 +312,7 @@ export default function ExpenditureTracker() {
                         <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: pct > 90 ? 'var(--red)' : pct > 70 ? 'var(--accent)' : 'var(--green)', borderRadius: 3 }} />
                         </div>
-                        <span style={{ fontSize: 10, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{pct.toFixed(0)}%</span>
+                        <span style={{ fontSize: 10, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{formatPercent(pct)}</span>
                       </div>
                     </td>
                   </tr>

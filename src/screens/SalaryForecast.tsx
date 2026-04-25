@@ -62,6 +62,14 @@ export default function SalaryForecast() {
     sum + Object.values(r.monthlyAmounts).reduce((s, v) => s + v, 0), 0
   )
 
+  // Salary allocation: sum of budgeted line items for crew/cast-related departments
+  const SALARY_DEPT_CODES = ['C', 'D', 'E', 'F'] as const
+  const salaryAllocation = SALARY_DEPT_CODES.reduce((sum, code) => {
+    const items = store.lineItems[code as import('../store/budgetStore').DeptCode] || []
+    return sum + items.reduce((s, i) => s + (i.rate || 0) * (i.qty || 1), 0)
+  }, 0)
+  const salaryOver = salaryAllocation > 0 && grandTotal > salaryAllocation
+
   const cumulativeMonthly = months.reduce<number[]>((acc, _, i) => {
     acc.push((acc[i - 1] || 0) + monthlyTotals[i])
     return acc
@@ -104,10 +112,20 @@ export default function SalaryForecast() {
         ))}
       </div>
 
+      {salaryOver && (
+        <div style={{ background: 'rgba(240,96,96,0.08)', border: '1px solid rgba(240,96,96,0.25)', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12 }}>🔴</span>
+          <span style={{ fontSize: 12, color: 'var(--text2)' }}>
+            <strong style={{ color: 'var(--red)' }}>OVER</strong>
+            {' '}Salary total {fmt(grandTotal, cur)} exceeds crew/cast budget allocation of {fmt(salaryAllocation, cur)} by {fmt(grandTotal - salaryAllocation, cur)}.
+          </span>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <button className="btn btn-primary btn-sm" onClick={addRole}>+ Add Role</button>
         <span style={{ fontSize: 12, color: 'var(--text2)' }}>
-          Grand Total: <strong style={{ color: 'var(--text)' }}>{fmt(grandTotal, cur)}</strong>
+          Grand Total: <strong style={{ color: salaryOver ? 'var(--red)' : 'var(--text)' }}>{fmt(grandTotal, cur)}</strong>
+          {salaryAllocation > 0 && <span style={{ color: 'var(--text2)', marginLeft: 8 }}>/ {fmt(salaryAllocation, cur)} allocated</span>}
         </span>
       </div>
 

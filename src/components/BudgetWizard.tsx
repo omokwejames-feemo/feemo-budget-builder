@@ -4,6 +4,7 @@
 // whatever is still missing. Emits a merged EditState + WizardExtras on submit.
 
 import { useState, useEffect, useRef } from 'react'
+import { formatPercent } from '../utils/formatPercent'
 import type { ParsedWorkbook } from '../utils/budgetParser'
 import { DEPARTMENTS } from '../store/budgetStore'
 import type { DeptCode } from '../store/budgetStore'
@@ -222,7 +223,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
           </div>
 
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-            Dept coverage: {deptTotal.toFixed(1)}%
+            Dept coverage: {formatPercent(deptTotal)}
             {totalBudget > 0 && ` · Total dept amount: ${deptTotalAmount.toLocaleString()}`}
           </div>
           {instTotal !== 100 && extras.installments.length > 0 && (
@@ -466,7 +467,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ color: deptTotal > 102 ? 'var(--accent-red)' : deptTotal > 98 ? 'var(--accent-green)' : 'var(--accent-amber)', fontWeight: 600 }}>
-            Total: {deptTotal.toFixed(1)}%
+            Total: {formatPercent(deptTotal)}
           </span>
           {totalBudget > 0 && (
             <span style={{ color: 'var(--text-muted)' }}>
@@ -482,8 +483,8 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
         {Math.abs(deptTotal - 100) > 2 && (
           <div style={{ color: 'var(--accent-amber)', marginTop: 6, fontSize: 11 }}>
             ⚠ Should total 100% — {deptTotal < 100
-              ? `${(100 - deptTotal).toFixed(1)}% unallocated`
-              : `${(deptTotal - 100).toFixed(1)}% over`}
+              ? `${formatPercent(100 - deptTotal)} unallocated`
+              : `${formatPercent(deptTotal - 100)} over`}
           </div>
         )}
         {totalBudget > 0 && deptTotalAmount > 0 && Math.abs(deptTotalAmount - totalBudget) > totalBudget * 0.01 && (
@@ -544,7 +545,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
       {extras.installments.length > 0 && (
         <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12 }}>
           <span style={{ color: Math.abs(instTotal - 100) < 1 ? 'var(--accent-green)' : 'var(--accent-amber)', fontWeight: 600 }}>
-            Total: {instTotal.toFixed(1)}%
+            Total: {formatPercent(instTotal)}
           </span>
           {Math.abs(instTotal - 100) >= 1 && (
             <span style={{ color: 'var(--accent-amber)', marginLeft: 10 }}>⚠ Should equal 100%</span>

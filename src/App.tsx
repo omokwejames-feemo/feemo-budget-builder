@@ -15,7 +15,11 @@ import ExpenditureTracker from './screens/ExpenditureTracker'
 import RebuildFromFiles from './screens/RebuildFromFiles'
 import BudgetUploadScreen from './screens/BudgetUploadScreen'
 import ProductionDashboard from './screens/ProductionDashboard'
+import MismatchBanner from './components/MismatchBanner'
 import UpdateDialog from './components/UpdateDialog'
+import { runIntegrityCheck } from './utils/budgetIntegrity'
+import { deriveProductionStats } from './utils/deriveProductionStats'
+import { formatPercent } from './utils/formatPercent'
 import OpenProjectDialog from './components/OpenProjectDialog'
 import BetaGate from './components/BetaGate'
 import { useRecentProjects } from './hooks/useRecentProjects'
@@ -157,6 +161,19 @@ function App() {
     })
     return unsub
   }, [appView])
+
+  // ── Budget integrity check (debounced, 800 ms) ───────────────────────────────
+  const integrityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (appView !== 'app' || store.isPopulatingFromUpload) return
+    if (integrityTimerRef.current) clearTimeout(integrityTimerRef.current)
+    integrityTimerRef.current = setTimeout(() => {
+      const result = runIntegrityCheck(store)
+      store.setBudgetIntegrity(result.status, result.discrepancy, result.sourceDepartment)
+    }, 800)
+    return () => { if (integrityTimerRef.current) clearTimeout(integrityTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.lineItems, store.forecastOverrides, store.salaryRoles])
 
   // ── Undo / redo subscription ─────────────────────────────────────────────────
   useEffect(() => {
@@ -606,6 +623,10 @@ function App() {
   const healthPct = Math.min(100, Math.round(totalAllocPct))
   const healthClass = healthPct >= 90 ? 'pill-green' : healthPct >= 55 ? 'pill-amber' : store.project.totalBudget > 0 ? 'pill-red' : ''
 
+  // Topbar: live production stats
+  const prodStats = deriveProductionStats(store)
+  const spentPillClass = prodStats.usedPct > 90 ? 'pill-red' : prodStats.usedPct > 70 ? 'pill-amber' : prodStats.totalSpent > 0 ? 'pill-green' : ''
+
   const NAV_SECTIONS = [
     {
       label: 'Planning',
@@ -743,7 +764,13 @@ function App() {
             {store.project.totalBudget > 0 && (
               <div className={`topbar-pill ${healthClass}`}>
                 <span className="pill-label">Health</span>
-                <span className="pill-value">{healthPct}%</span>
+                <span className="pill-value">{formatPercent(healthPct)}</span>
+              </div>
+            )}
+            {prodStats.totalSpent > 0 && (
+              <div className={`topbar-pill ${spentPillClass}`}>
+                <span className="pill-label">Spent</span>
+                <span className="pill-value">{formatPercent(prodStats.usedPct)}</span>
               </div>
             )}
             <div className="topbar-pill">
@@ -772,6 +799,7 @@ function App() {
         </header>
 
         <main className="content">
+          <MismatchBanner screens={['budget', 'salary', 'forecast', 'production']} currentScreen={screen} />
           {screen === 'assumptions' && <PageErrorBoundary region="Assumptions"><AssumptionsDashboard issues={assumptionIssues} /></PageErrorBoundary>}
           {screen === 'production'  && <PageErrorBoundary region="Production Dashboard"><ProductionDashboard /></PageErrorBoundary>}
           {screen === 'budget'      && <PageErrorBoundary region="Production Budget"><ProductionBudget /></PageErrorBoundary>}
