@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell, Menu } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join, dirname } from 'path'
-import { writeFile as writeFileAsync, readFile as readFileAsync, unlink } from 'fs/promises'
+import { writeFile as writeFileAsync, readFile as readFileAsync, unlink, readdir, appendFile } from 'fs/promises'
+import { existsSync } from 'fs'
 import { spawn } from 'child_process'
 import { tmpdir, homedir } from 'os'
 import { createServer } from 'http'
@@ -451,7 +452,12 @@ function buildAppMenu() {
       label: 'File',
       submenu: [
         {
-          label: 'New Project (Fresh Start)',
+          label: 'Open Project',
+          accelerator: 'CommandOrControl+O',
+          click: () => { mainWindow?.webContents.send('menu-open-project') },
+        },
+        {
+          label: 'New Project',
           accelerator: 'CommandOrControl+Shift+N',
           click: () => { mainWindow?.webContents.send('new-project-fresh') },
         },
@@ -519,6 +525,31 @@ function createWindow() {
 
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     console.error('[feemo] Renderer crashed:', details.reason, 'exit:', details.exitCode)
+    const msg = `[render-process-gone] ${new Date().toISOString()} reason=${details.reason}\n---\n`
+    appendFile(ERROR_LOG_PATH, msg, 'utf-8').catch(() => {})
+    dialog.showMessageBox({
+      type: 'error',
+      title: 'Feemo Budget Manager',
+      message: 'The app stopped responding unexpectedly.',
+      detail: 'Would you like to restart?',
+      buttons: ['Restart', 'Quit'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) { app.relaunch(); app.exit(0) } else { app.exit(1) }
+    })
+  })
+
+  mainWindow.webContents.on('unresponsive', () => {
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Feemo Budget Manager',
+      message: 'The app is not responding.',
+      detail: 'Would you like to wait or restart?',
+      buttons: ['Wait', 'Restart'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 1) { app.relaunch(); app.exit(0) }
+    })
   })
 
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
@@ -871,6 +902,77 @@ ipcMain.handle('gdrive-upload', async (_event, { data, fileName }: { data: strin
   } catch (err) {
     return { success: false, error: String(err) }
   }
+})
+
+// ── Crash recovery IPC ───────────────────────────────────────────────────────
+
+const ERROR_LOG_PATH = join(app.getPath('userData'), 'feemo-errors.log')
+
+ipcMain.handle('log-error', async (_event, message: string) => {
+  try {
+    await appendFile(ERROR_LOG_PATH, message + '\n', 'utf-8')
+  } catch {}
+  return { success: true }
+})
+
+ipcMain.handle('save-crash-recovery', async (_event, data: string) => {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+  const path = join(app.getPath('userData'), `crash-recovery-${ts}.feemo`)
+  try {
+    await writeFileAsync(path, data, 'utf-8')
+    return { success: true, path }
+  } catch (err) {
+    return { success: false, error: String(err) }
+  }
+})
+
+ipcMain.handle('list-crash-recoveries', async () => {
+  try {
+    const dir = app.getPath('userData')
+    const files = await readdir(dir)
+    const recoveries = files
+      .filter(f => f.startsWith('crash-recovery-') && f.endsWith('.feemo'))
+      .map(f => join(dir, f))
+    return { success: true, files: recoveries }
+  } catch {
+    return { success: true, files: [] }
+  }
+})
+
+ipcMain.handle('load-crash-recovery', async (_event, filePath: string) => {
+  try {
+    const data = await readFileAsync(filePath, 'utf-8')
+    // Delete after loading
+    await unlink(filePath).catch(() => {})
+    return { success: true, data }
+  } catch (err) {
+    return { success: false, error: String(err) }
+  }
+})
+
+ipcMain.handle('dismiss-crash-recovery', async (_event, filePath: string) => {
+  try {
+    await unlink(filePath)
+  } catch {}
+  return { success: true }
+})
+
+ipcMain.handle('restart-app', () => {
+  setImmediate(() => { app.relaunch(); app.exit(0) })
+})
+
+// ── Uncaught exception handlers ───────────────────────────────────────────────
+
+process.on('uncaughtException', async (err) => {
+  const msg = `[uncaughtException] ${new Date().toISOString()}\n${err.stack ?? err.message}\n---\n`
+  try { await appendFile(ERROR_LOG_PATH, msg, 'utf-8') } catch {}
+  mainWindow?.webContents.send('main-process-error', { type: 'uncaughtException', message: err.message })
+})
+
+process.on('unhandledRejection', async (reason) => {
+  const msg = `[unhandledRejection] ${new Date().toISOString()}\n${String(reason)}\n---\n`
+  try { await appendFile(ERROR_LOG_PATH, msg, 'utf-8') } catch {}
+  mainWindow?.webContents.send('main-process-error', { type: 'unhandledRejection', message: String(reason) })
 })
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

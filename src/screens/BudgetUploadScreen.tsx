@@ -16,6 +16,7 @@ import {
 } from '../utils/budgetParser'
 import { useBudgetStore, DEPARTMENTS, DeptCode } from '../store/budgetStore'
 import BudgetWizard, { WizardExtras } from '../components/BudgetWizard'
+import { WizardErrorBoundary } from '../components/ErrorBoundary'
 
 interface Props { onDone: () => void; onCancel: () => void }
 
@@ -229,10 +230,39 @@ interface PendingFallback {
   step:          'salary' | 'forecast'
 }
 
+// Sheet type options for the Page Declaration dialog (Stage 2)
+const DECLARATION_OPTIONS = [
+  { key: 'budget-summary',      label: 'Budget Summary',                    desc: 'Overview of all department totals' },
+  { key: 'production-budget',   label: 'Production Budget',                 desc: 'Full line-item breakdown by department' },
+  { key: 'salary-forecast',     label: 'Salary Forecast',                   desc: 'Crew and cast rates and schedules' },
+  { key: 'production-forecast', label: 'Production Forecast / Cashflow',    desc: 'Week-by-week spend projection' },
+  { key: 'payment-schedule',    label: 'Payment Schedule',                  desc: 'Individual payment entries' },
+  { key: 'production-timeline', label: 'Timeline / Schedule',               desc: 'Shoot dates and milestones' },
+  { key: 'assumptions',         label: 'Assumptions',                       desc: 'Project parameters, shoot days, rates' },
+] as const
+
+type DeclarationKey = typeof DECLARATION_OPTIONS[number]['key']
+
 export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const store = useBudgetStore()
-  const [stage, setStage] = useState<'parsing' | 'error' | 'confirm'>('parsing')
+
+  // ── Upload flow stage ──────────────────────────────────────────────────────
+  const [uploadFlowStage, setUploadFlowStage] = useState<
+    'file-select' | 'page-declaration' | 'parsing' | 'parse-error' | 'confirm'
+  >('file-select')
+
+  // Page declaration checklist
+  const [declaredTypes, setDeclaredTypes] = useState<Set<DeclarationKey>>(new Set())
+  // Parsed buffer held between stage 2 and stage 3
+  const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null)
+
+  // Parse progress (stage 3)
+  const [parseProgressLabel, setParseProgressLabel] = useState('Scanning file…')
+  const [parseProgressPct, setParseProgressPct] = useState(0)
+  const [parseTookTooLong, setParseTookTooLong] = useState(false)
   const [parseError, setParseError] = useState('')
+
+  // Existing confirm-stage state
   const [pw, setPw] = useState<ParsedWorkbook | null>(null)
   const [edit, setEdit] = useState<EditState | null>(null)
   const [conflicts, setConflicts] = useState<ParsedConflict[]>([])
@@ -248,38 +278,78 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const [fallbackParsing, setFallbackParsing] = useState(false)
   const [fallbackError, setFallbackError] = useState('')
 
-  useEffect(() => { handleUpload() }, [])
+  // Stage 1: file select on mount
+  useEffect(() => { handleFileSelect() }, [])
 
-  async function handleUpload() {
-    if (!window.electronAPI) { setParseError('Electron API not available.'); setStage('error'); return }
+  // Stage 1 — OS file dialog → buffer → show page declaration
+  async function handleFileSelect() {
+    if (!window.electronAPI) { setParseError('Electron API not available.'); setUploadFlowStage('parse-error'); return }
     const res = await window.electronAPI.openXlsxBudget()
     if (!res.success || !res.buffer) { onCancel(); return }
-
-    // Capture file name for the audit log
     if (res.filePath) setUploadedFileName(res.filePath.split('/').pop() ?? res.filePath)
+    setFileBuffer(new Uint8Array(res.buffer).buffer)
+    setUploadFlowStage('page-declaration')
+  }
+
+  // Stage 3 — parse the buffer with progress simulation
+  async function handleScanFile() {
+    if (!fileBuffer) return
+    setUploadFlowStage('parsing')
+    setParseTookTooLong(false)
+
+    // Progress label sequence based on declared types
+    const labels: string[] = [
+      ...Array.from(declaredTypes).map(t => {
+        const opt = DECLARATION_OPTIONS.find(o => o.key === t)
+        return `Scanning ${opt?.label ?? t}…`
+      }),
+      'Reconciling data…',
+      'Finalising…',
+    ]
+    let labelIdx = 0
+    const labelInterval = setInterval(() => {
+      labelIdx = Math.min(labelIdx + 1, labels.length - 1)
+      setParseProgressLabel(labels[labelIdx])
+      setParseProgressPct(Math.min(85, Math.round((labelIdx / labels.length) * 100)))
+    }, 600)
+
+    // Warn if taking > 10s
+    const tooLongTimer = setTimeout(() => setParseTookTooLong(true), 10000)
 
     try {
-      const arrayBuf = new Uint8Array(res.buffer).buffer
-      const result = await parseBudgetBuffer(arrayBuf)
+      // File-size guard: for files > 500KB, defer parse to next tick so loading UI renders
+      if (fileBuffer.byteLength > 500 * 1024) {
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+
+      const result = await parseBudgetBuffer(fileBuffer)
+      clearInterval(labelInterval)
+      clearTimeout(tooLongTimer)
+      setParseProgressPct(100)
+      setParseProgressLabel('Done!')
+
+      await new Promise(resolve => setTimeout(resolve, 300))
+
       setPw(result)
       setEdit(toEditState(result))
       setConflicts(result.conflicts.map(c => ({ ...c, chosenSource: null })))
       setDetectedType(result.documentType)
-
-      // Jump straight to conflicts tab if there are any
       if (result.conflicts.length > 0) setSection('conflicts')
       else setSection('summary')
+      setUploadFlowStage('confirm')
 
-      setStage('confirm')
-
-      // Auto-launch wizard for sparse/summary documents
       const isSparse = result.documentType === 'dept-summary' || result.matchStats.deptCoverage < 0.6
       if (isSparse) setShowWizard(true)
     } catch (err) {
+      clearInterval(labelInterval)
+      clearTimeout(tooLongTimer)
       setParseError(String(err))
-      setStage('error')
+      setUploadFlowStage('parse-error')
     }
   }
+
+  // Legacy alias used by existing code below
+  const stage = uploadFlowStage === 'confirm' ? 'confirm' : uploadFlowStage === 'parse-error' ? 'error' : 'parsing'
 
   function upEdit(key: keyof EditState, value: string) {
     setEdit(prev => prev ? { ...prev, [key]: value } : prev)
@@ -401,37 +471,6 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
       if (!row.deptCode) continue
       for (const [month, value] of Object.entries(row.monthlyValues)) {
         if (value > 0) store.setForecastOverride(`${row.deptCode}_${month}`, value)
-      }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // STEP 7b — Wizard key roles → salary forecast rows (if salary not already parsed)
-    // ─────────────────────────────────────────────────────────────────────────────
-    if (wizardExtras && wizardExtras.keyRoles.length > 0 && pw.salaryRoles.length === 0) {
-      const deptCodeForRole = (role: string): import('../store/budgetStore').DeptCode => {
-        const r = role.toLowerCase()
-        if (r.includes('director') || r.includes('dop') || r.includes('dp')) return 'D'
-        if (r.includes('producer') || r.includes('line producer')) return 'C'
-        if (r.includes('editor') || r.includes('post') || r.includes('vfx')) return 'FF'
-        if (r.includes('sound')) return 'H'
-        if (r.includes('gaffer') || r.includes('lighting') || r.includes('electric')) return 'I'
-        if (r.includes('art') || r.includes('production designer')) return 'J'
-        if (r.includes('costume') || r.includes('wardrobe') || r.includes('stylist')) return 'M'
-        if (r.includes('makeup') || r.includes('hair')) return 'N'
-        return 'F'
-      }
-      const newRoles: import('../store/budgetStore').SalaryRole[] = wizardExtras.keyRoles
-        .filter(kr => kr.role.trim() && kr.rate > 0)
-        .map((kr, i) => ({
-          id: `wiz_role_${i}`,
-          schedNo: 'WIZ',
-          role: kr.role,
-          deptCode: deptCodeForRole(kr.role),
-          phase: 'all' as const,
-          monthlyAmounts: {},
-        }))
-      if (newRoles.length > 0) {
-        store.setSalaryRoles(mergeSalaryRoles(newRoles, store.salaryRoles))
       }
     }
 
@@ -744,15 +783,123 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
     )
   }
 
-  // ─── Stage: parsing ──────────────────────────────────────────────────────────
+  // ─── Stage 1: file-select (waiting for OS dialog) ───────────────────────────
 
-  if (stage === 'parsing') {
+  if (uploadFlowStage === 'file-select') {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 36, marginBottom: 16 }}>📂</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>Analysing workbook…</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>Opening file dialog…</div>
           <div style={{ fontSize: 13, color: 'var(--text3)' }}>Select your Excel budget in the file dialog</div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Stage 2: page declaration dialog ────────────────────────────────────────
+
+  if (uploadFlowStage === 'page-declaration') {
+    const toggleType = (key: DeclarationKey) => {
+      setDeclaredTypes(prev => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key); else next.add(key)
+        return next
+      })
+    }
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 24 }}>
+        <div style={{ background: 'var(--bg-surface, #1a1a1a)', border: '1px solid var(--border, #333)', borderRadius: 16, padding: '40px 48px', maxWidth: 580, width: '100%', boxShadow: '0 24px 80px rgba(0,0,0,0.7)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent, #4e9fff)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
+            Upload Budget — Step 2 of 4
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text, #fff)', marginBottom: 6 }}>What did you upload?</div>
+          <div style={{ fontSize: 13, color: 'var(--text3, #888)', marginBottom: 28, lineHeight: 1.6 }}>
+            Tell us what's in <strong style={{ color: 'var(--text, #fff)' }}>{uploadedFileName || 'this file'}</strong> so we can read it correctly.
+            <br />Select all that apply.
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+            {DECLARATION_OPTIONS.map(opt => {
+              const checked = declaredTypes.has(opt.key)
+              return (
+                <label
+                  key={opt.key}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px',
+                    background: checked ? 'rgba(78,159,255,0.08)' : 'var(--bg2, #141414)',
+                    border: `1px solid ${checked ? 'rgba(78,159,255,0.4)' : 'var(--border, #333)'}`,
+                    borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleType(opt.key)}
+                    style={{ marginTop: 2, flexShrink: 0, accentColor: 'var(--accent, #4e9fff)' }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text, #fff)', marginBottom: 2 }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3, #888)' }}>{opt.desc}</div>
+                  </div>
+                </label>
+              )
+            })}
+          </div>
+
+          <div style={{ fontSize: 11, color: 'var(--text3, #888)', marginBottom: 20, fontStyle: 'italic' }}>
+            Not sure? Select all that might apply. The app will only read what it finds.
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button onClick={onCancel} style={S.btnGhost}>Cancel</button>
+            <button
+              onClick={handleScanFile}
+              disabled={declaredTypes.size === 0}
+              style={{
+                ...S.btnPrimary,
+                opacity: declaredTypes.size === 0 ? 0.4 : 1,
+                cursor: declaredTypes.size === 0 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Scan File →
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Stage 3: parsing with loading bar ───────────────────────────────────────
+
+  if (uploadFlowStage === 'parsing') {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <div style={{ textAlign: 'center', maxWidth: 440, width: '90%' }}>
+          <div style={{ fontSize: 32, marginBottom: 20 }}>🔍</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text, #fff)', marginBottom: 8 }}>Reading your file</div>
+          <div style={{ fontSize: 13, color: 'var(--text3, #888)', marginBottom: 24 }}>{parseProgressLabel}</div>
+
+          {/* Progress bar */}
+          <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, marginBottom: 8, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${parseProgressPct}%`,
+              background: 'var(--accent, #4e9fff)',
+              borderRadius: 3,
+              transition: 'width 0.4s ease',
+            }} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text3, #888)', marginBottom: 24 }}>{parseProgressPct}%</div>
+
+          {parseTookTooLong && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--accent-amber, #f5a623)', marginBottom: 12 }}>
+                Still working on a large file…
+              </div>
+              <button onClick={onCancel} style={{ ...S.btnGhost, fontSize: 12 }}>Cancel</button>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -760,14 +907,19 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
 
   // ─── Stage: error ────────────────────────────────────────────────────────────
 
-  if (stage === 'error') {
+  if (uploadFlowStage === 'parse-error') {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
         <div style={{ textAlign: 'center', maxWidth: 480 }}>
           <div style={{ fontSize: 36, marginBottom: 16 }}>⚠</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Could not read this file</div>
-          <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>{parseError || 'Ensure the file is a valid .xlsx workbook.'}</div>
-          <button onClick={onCancel} style={S.btnPrimary}>Back to Home</button>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24, lineHeight: 1.7 }}>
+            {parseError || 'Ensure the file is a valid .xlsx workbook and is not locked by another application.'}
+          </div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button onClick={() => { setUploadFlowStage('file-select'); handleFileSelect() }} style={S.btnPrimary}>Try Again</button>
+            <button onClick={onCancel} style={S.btnGhost}>Continue Without Upload</button>
+          </div>
         </div>
       </div>
     )
@@ -1253,14 +1405,16 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
       </div>
     </div>
 
-    {/* Budget Wizard modal */}
+    {/* Budget Wizard modal — wrapped in error boundary to prevent app crash */}
     {showWizard && edit && pw && (
-      <BudgetWizard
-        initialEdit={edit}
-        parsedWorkbook={pw}
-        onComplete={handleWizardComplete}
-        onCancel={() => setShowWizard(false)}
-      />
+      <WizardErrorBoundary onClose={() => setShowWizard(false)}>
+        <BudgetWizard
+          initialEdit={edit}
+          parsedWorkbook={pw}
+          onComplete={handleWizardComplete}
+          onCancel={() => setShowWizard(false)}
+        />
+      </WizardErrorBoundary>
     )}
 
     {/* Overwrite warning modal */}

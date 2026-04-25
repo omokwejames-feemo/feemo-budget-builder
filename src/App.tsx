@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useBudgetStore, BudgetState } from './store/budgetStore'
+import { AppErrorBoundary, PageErrorBoundary } from './components/ErrorBoundary'
 import HomeScreen from './screens/HomeScreen'
 import NoticesDrawer from './components/NoticesDrawer'
 import AssumptionsDashboard from './screens/AssumptionsDashboard'
@@ -13,6 +14,7 @@ import PaymentScheduleCreator from './screens/PaymentScheduleCreator'
 import ExpenditureTracker from './screens/ExpenditureTracker'
 import RebuildFromFiles from './screens/RebuildFromFiles'
 import BudgetUploadScreen from './screens/BudgetUploadScreen'
+import ProductionDashboard from './screens/ProductionDashboard'
 import UpdateDialog from './components/UpdateDialog'
 import OpenProjectDialog from './components/OpenProjectDialog'
 import BetaGate from './components/BetaGate'
@@ -20,10 +22,11 @@ import { useRecentProjects } from './hooks/useRecentProjects'
 import { useIssueDetector } from './hooks/useIssueDetector'
 import './App.css'
 
-type Screen = 'assumptions' | 'budget' | 'salary' | 'forecast' | 'payments' | 'expenditure' | 'export' | 'file' | 'about'
+type Screen = 'assumptions' | 'production' | 'budget' | 'salary' | 'forecast' | 'payments' | 'expenditure' | 'export' | 'file' | 'about'
 
 const NAV: { id: Screen; label: string; icon: string }[] = [
   { id: 'assumptions',  label: 'Assumptions',         icon: '⚙'  },
+  { id: 'production',   label: 'Production',          icon: '🎬' },
   { id: 'budget',       label: 'Production Budget',   icon: '₦'  },
   { id: 'salary',       label: 'Salary Forecast',     icon: '👥' },
   { id: 'forecast',     label: 'Production Forecast', icon: '📈' },
@@ -77,7 +80,7 @@ function budgetDataChanged(a: BudgetState, b: BudgetState): boolean {
   )
 }
 
-export default function App() {
+function App() {
   const [accessGranted, setAccessGranted] = useState(false)
   const [accessExpiresAt, setAccessExpiresAt] = useState<number | null>(null)
   const [showExpiryNotice, setShowExpiryNotice] = useState(false)
@@ -91,6 +94,7 @@ export default function App() {
   const [showOpenDialog, setShowOpenDialog] = useState(false)
   const [showFreshStartConfirm, setShowFreshStartConfirm] = useState(false)
   const [showNotices, setShowNotices] = useState(false)
+  const [crashRecoveryFiles, setCrashRecoveryFiles] = useState<string[]>([])
 
   // ── Undo / redo ──────────────────────────────────────────────────────────────
   const undoStackRef   = useRef<UndoSnapshot[]>([])
@@ -252,10 +256,34 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appView, handleUndo, handleRedo])
 
-  // Listen for "New Project (Fresh Start)" from the native File menu
+  // Listen for "New Project" from the native File menu
   useEffect(() => {
     window.electronAPI?.onNewProjectFresh(() => setShowFreshStartConfirm(true))
   }, [])
+
+  // Listen for "Open Project" from the native File menu
+  useEffect(() => {
+    window.electronAPI?.onMenuOpenProject(() => setShowOpenDialog(true))
+  }, [])
+
+  // Check for crash recovery files on launch
+  useEffect(() => {
+    window.electronAPI?.listCrashRecoveries?.().then(r => {
+      if (r.files.length > 0) setCrashRecoveryFiles(r.files)
+    }).catch(() => {})
+  }, [])
+
+  // Auto-save project state to a crash-recovery file when the window closes unexpectedly
+  useEffect(() => {
+    const handler = () => {
+      if (!hasUnsavedChanges) return
+      const data = getSerializableState()
+      window.electronAPI?.saveCrashRecovery?.(data).catch(() => {})
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnsavedChanges])
 
   function getSerializableState() {
     const s = useBudgetStore.getState()
@@ -440,15 +468,60 @@ export default function App() {
     )
   }
 
+  // Crash recovery dialog
+  const crashRecoveryDialog = crashRecoveryFiles.length > 0 ? (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '36px 40px', maxWidth: 460, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', textAlign: 'center' }}>
+        <div style={{ fontSize: 28, marginBottom: 14 }}>♻</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Unsaved Work Found</div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 28 }}>
+          We found unsaved work from a previous session. Would you like to restore it?
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button
+            onClick={async () => {
+              const r = await window.electronAPI?.loadCrashRecovery?.(crashRecoveryFiles[0])
+              if (r?.success && r.data) {
+                try {
+                  const parsed = JSON.parse(r.data)
+                  store.loadState(parsed)
+                  setScreen('assumptions')
+                  setAppView('app')
+                  isFirstMount.current = true
+                } catch {}
+              }
+              setCrashRecoveryFiles([])
+            }}
+            style={{ width: '100%', padding: '12px 0', background: 'var(--accent-blue)', color: '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+          >
+            Restore Previous Session
+          </button>
+          <button
+            onClick={async () => {
+              for (const f of crashRecoveryFiles) {
+                await window.electronAPI?.dismissCrashRecovery?.(f).catch(() => {})
+              }
+              setCrashRecoveryFiles([])
+            }}
+            style={{ width: '100%', padding: '12px 0', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: '1px solid var(--border-default)', borderRadius: 8, cursor: 'pointer' }}
+          >
+            Discard &amp; Start Fresh
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   // Fresh-start dialog rendered as a floating overlay regardless of current view
   const freshStartDialog = showFreshStartConfirm ? (
     <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '36px 40px', maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', textAlign: 'center' }}>
         <div style={{ fontSize: 30, marginBottom: 14 }}>◻</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>New Project</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Start a New Project?</div>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 28 }}>
-          Starting a new project will close the current one.
-          {hasUnsavedChanges ? ' You have unsaved changes — save before continuing?' : ' Any unsaved changes will be lost.'}
+          {hasUnsavedChanges
+            ? `You have unsaved changes to ${store.project.title || 'this project'}. What would you like to do?`
+            : 'This will close the current project. Any unsaved changes will be lost.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {hasUnsavedChanges && (
@@ -456,20 +529,20 @@ export default function App() {
               onClick={async () => { await handleSave(); doFreshStart() }}
               style={{ width: '100%', padding: '12px 0', background: 'var(--accent-blue)', color: '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: 'none', borderRadius: 8, cursor: 'pointer' }}
             >
-              Save &amp; Start New Project
+              Save and Start New
             </button>
           )}
           <button
             onClick={doFreshStart}
             style={{ width: '100%', padding: '12px 0', background: hasUnsavedChanges ? 'rgba(240,90,90,0.08)' : 'var(--accent-blue)', color: hasUnsavedChanges ? 'var(--accent-red)' : '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: hasUnsavedChanges ? '1px solid rgba(240,90,90,0.25)' : 'none', borderRadius: 8, cursor: 'pointer' }}
           >
-            {hasUnsavedChanges ? "Don't Save — Start Anyway" : 'Start New Project'}
+            {hasUnsavedChanges ? 'Discard Changes and Start New' : 'Start New Project'}
           </button>
           <button
             onClick={() => setShowFreshStartConfirm(false)}
             style={{ width: '100%', padding: '12px 0', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: '1px solid var(--border-default)', borderRadius: 8, cursor: 'pointer' }}
           >
-            Cancel
+            Go Back
           </button>
         </div>
       </div>
@@ -673,12 +746,10 @@ export default function App() {
                 <span className="pill-value">{healthPct}%</span>
               </div>
             )}
-            {store.project.shootDays > 0 && (
-              <div className="topbar-pill">
-                <span className="pill-label">Shoot</span>
-                <span className="pill-value">{store.project.shootDays}d</span>
-              </div>
-            )}
+            <div className="topbar-pill">
+              <span className="pill-label">Shoot</span>
+              <span className="pill-value">{store.project.shootDays ?? 0}d</span>
+            </div>
             {hasForecastWarnings ? (
               <div className="topbar-pill pill-red">
                 <span className="pill-label">▾</span>
@@ -701,24 +772,27 @@ export default function App() {
         </header>
 
         <main className="content">
-          {screen === 'assumptions' && <AssumptionsDashboard issues={assumptionIssues} />}
-          {screen === 'budget'      && <ProductionBudget />}
-          {screen === 'salary'      && <SalaryForecast />}
-          {screen === 'forecast'    && <ProductionForecast issues={forecastIssues} />}
-          {screen === 'payments'    && <PaymentScheduleCreator />}
-          {screen === 'expenditure' && <ExpenditureTracker />}
-          {screen === 'export'      && <ExportScreen />}
-          {screen === 'about'       && <AboutScreen />}
+          {screen === 'assumptions' && <PageErrorBoundary region="Assumptions"><AssumptionsDashboard issues={assumptionIssues} /></PageErrorBoundary>}
+          {screen === 'production'  && <PageErrorBoundary region="Production Dashboard"><ProductionDashboard /></PageErrorBoundary>}
+          {screen === 'budget'      && <PageErrorBoundary region="Production Budget"><ProductionBudget /></PageErrorBoundary>}
+          {screen === 'salary'      && <PageErrorBoundary region="Salary Forecast"><SalaryForecast /></PageErrorBoundary>}
+          {screen === 'forecast'    && <PageErrorBoundary region="Production Forecast"><ProductionForecast issues={forecastIssues} /></PageErrorBoundary>}
+          {screen === 'payments'    && <PageErrorBoundary region="Payment Schedules"><PaymentScheduleCreator /></PageErrorBoundary>}
+          {screen === 'expenditure' && <PageErrorBoundary region="Expenditure Tracker"><ExpenditureTracker /></PageErrorBoundary>}
+          {screen === 'export'      && <PageErrorBoundary region="Export"><ExportScreen /></PageErrorBoundary>}
+          {screen === 'about'       && <PageErrorBoundary region="About"><AboutScreen /></PageErrorBoundary>}
           {screen === 'file' && (
-            <FileScreen
-              currentFilePath={currentFilePath}
-              hasUnsavedChanges={hasUnsavedChanges}
-              onSave={handleSave}
-              onSaveAs={handleSaveAs}
-              onOpen={handleOpenProject}
-              onClose={handleClose}
-              getSerializableState={getSerializableState}
-            />
+            <PageErrorBoundary region="File">
+              <FileScreen
+                currentFilePath={currentFilePath}
+                hasUnsavedChanges={hasUnsavedChanges}
+                onSave={handleSave}
+                onSaveAs={handleSaveAs}
+                onOpen={handleOpenProject}
+                onClose={handleClose}
+                getSerializableState={getSerializableState}
+              />
+            </PageErrorBoundary>
           )}
         </main>
       </div>
@@ -737,6 +811,7 @@ export default function App() {
         <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
       )}
       {freshStartDialog}
+      {crashRecoveryDialog}
       {showNotices && (
         <NoticesDrawer
           onClose={() => setShowNotices(false)}
@@ -748,5 +823,14 @@ export default function App() {
         <div className="save-toast">✓ Saved</div>
       )}
     </div>
+  )
+}
+
+// Root export wraps the entire app in AppErrorBoundary
+export default function AppWithBoundary() {
+  return (
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   )
 }

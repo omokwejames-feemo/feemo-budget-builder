@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useBudgetStore, DEPARTMENTS, PaymentSchedule, PaymentScheduleRow } from '../store/budgetStore'
+import { formatAmount } from '../utils/formatCurrency'
 
 function uid() { return Math.random().toString(36).slice(2) }
 
@@ -15,7 +16,7 @@ function calcAmountPayable(row: PaymentScheduleRow): number {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatAmount(n)
 }
 
 function deptNameFromCode(code: string): string {

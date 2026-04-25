@@ -226,7 +226,7 @@ const defaultProject: ProjectDetails = {
   episodeDuration: 45,
   weeksPerEpisode: 1,
   daysPerEpisode: 1,
-  shootDays: 20,
+  shootDays: 0,
   location: '',
   currency: '',
   exchangeRate: 1,

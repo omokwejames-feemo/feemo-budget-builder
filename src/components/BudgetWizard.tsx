@@ -1,9 +1,9 @@
-// Budget Questionnaire Wizard — Fix Batch 9
+// Budget Questionnaire Wizard — Fix Batch 9 / Batch 14 S6.5
 // 6-stage guided flow for sparse or incomplete budget uploads.
 // Receives the partially-populated EditState from the parser and collects
 // whatever is still missing. Emits a merged EditState + WizardExtras on submit.
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ParsedWorkbook } from '../utils/budgetParser'
 import { DEPARTMENTS } from '../store/budgetStore'
 import type { DeptCode } from '../store/budgetStore'
@@ -19,11 +19,6 @@ export interface EditState {
   deptPct: Partial<Record<DeptCode, string>>
 }
 
-export interface KeyRoleRate {
-  role: string
-  rate: number
-  unit: 'daily' | 'weekly' | 'fixed'
-}
 
 export interface WizardExtras {
   format: string
@@ -33,8 +28,6 @@ export interface WizardExtras {
   shootDays: number
   shootDaysPerWeek: number
   installments: Array<{ pct: number; month: number }>
-  keyRoles: KeyRoleRate[]
-  totalSalaryBudget: number
 }
 
 interface Props {
@@ -116,51 +109,30 @@ function StageDot({ stage, active, done }: { stage: number; active: boolean; don
   )
 }
 
-const STAGE_LABELS = ['Project', 'Shoot', 'Timeline', 'Departments', 'Crew', 'Funding']
-const TOTAL_STAGES = 6
+const STAGE_LABELS = ['Project', 'Shoot', 'Timeline', 'Departments', 'Funding']
+const TOTAL_STAGES = 5
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, onCancel }: Props) {
+  const mountedRef = useRef(true)
+
+  // Cleanup on unmount — prevents stale state updates if the wizard is torn
+  // down mid-session (e.g. when the user opens a project file while wizard is open).
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
   const [stage, setStage] = useState(1)
   const [edit, setEdit] = useState<EditState>({ ...initialEdit })
-  // Pre-populate key roles from detected salary roles in the parsed workbook
-  const defaultKeyRoles: KeyRoleRate[] = [
-    { role: 'Director',           rate: 0, unit: 'weekly' },
-    { role: 'Producer',           rate: 0, unit: 'weekly' },
-    { role: 'Line Producer',      rate: 0, unit: 'weekly' },
-    { role: 'DOP',                rate: 0, unit: 'weekly' },
-    { role: 'Production Designer',rate: 0, unit: 'weekly' },
-    { role: 'Editor',             rate: 0, unit: 'weekly' },
-    { role: 'Sound Designer',     rate: 0, unit: 'weekly' },
-    { role: 'Costume Designer',   rate: 0, unit: 'weekly' },
-    { role: 'Gaffer',             rate: 0, unit: 'weekly' },
-  ]
-
-  // Merge any roles detected from the upload into the default list
-  const uploadedRoles: KeyRoleRate[] = parsedWorkbook.salaryRoles.map(r => ({
-    role: r.role,
-    rate: Math.max(...Object.values(r.monthlyAmounts)),
-    unit: 'weekly' as const,
-  }))
-  const mergedDefaultRoles: KeyRoleRate[] = [...defaultKeyRoles]
-  for (const ur of uploadedRoles) {
-    const idx = mergedDefaultRoles.findIndex(r => r.role.toLowerCase() === ur.role.toLowerCase())
-    if (idx >= 0) {
-      if (ur.rate > 0) mergedDefaultRoles[idx] = { ...mergedDefaultRoles[idx], rate: ur.rate }
-    } else {
-      mergedDefaultRoles.push(ur)
-    }
-  }
-
   const [extras, setExtras] = useState<WizardExtras>({
     format: 'Feature Film', episodes: 0, episodeDuration: 45,
     location: '', shootDays: 0, shootDaysPerWeek: 5,
     installments: [{ pct: 50, month: 1 }, { pct: 50, month: 3 }],
-    keyRoles: mergedDefaultRoles,
-    totalSalaryBudget: 0,
   })
   const [showSummary, setShowSummary] = useState(false)
+  const [shootDurationUnit, setShootDurationUnit] = useState<'days' | 'weeks'>('days')
 
   const upEdit = (k: keyof EditState, v: string) => setEdit(prev => ({ ...prev, [k]: v }))
   const upExtras = <K extends keyof WizardExtras>(k: K, v: WizardExtras[K]) =>
@@ -358,16 +330,49 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   // ── Stage 2: Shoot Parameters ────────────────────────────────────────────────
 
+  const shootDaysDisplay = shootDurationUnit === 'weeks'
+    ? String(alreadyHas.shootDays ? Math.ceil((parseFloat(edit.shootDays) || 0) / (extras.shootDaysPerWeek || 5)) : Math.ceil((extras.shootDays || 0) / (extras.shootDaysPerWeek || 5)) || '')
+    : alreadyHas.shootDays ? edit.shootDays : String(extras.shootDays || '')
+
+  function handleShootDurationChange(v: string) {
+    const n = parseInt(v) || 0
+    const days = shootDurationUnit === 'weeks' ? n * (extras.shootDaysPerWeek || 5) : n
+    if (alreadyHas.shootDays) upEdit('shootDays', String(days))
+    else upExtras('shootDays', days)
+  }
+
   const stage2 = (
     <>
       <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>Stage 2 — Shoot Parameters</div>
       <Grid>
-        <Input
-          label={`Total Shoot Days${alreadyHas.shootDays ? ' ✓' : ''}`}
-          value={alreadyHas.shootDays ? edit.shootDays : String(extras.shootDays || '')}
-          onChange={v => alreadyHas.shootDays ? upEdit('shootDays', v) : upExtras('shootDays', parseInt(v) || 0)}
-          type="number" placeholder="e.g. 25"
-        />
+        <div style={{ marginBottom: 14 }}>
+          <Label>{`Shoot Duration${alreadyHas.shootDays ? ' ✓' : ''}`}</Label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="number"
+              value={shootDaysDisplay}
+              onChange={e => handleShootDurationChange(e.target.value)}
+              placeholder={shootDurationUnit === 'weeks' ? 'e.g. 5' : 'e.g. 25'}
+              style={{ flex: 1, padding: '10px 13px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-ui)' }}
+            />
+            <div style={{ display: 'flex', border: '1px solid var(--border-default)', borderRadius: 7, overflow: 'hidden', flexShrink: 0 }}>
+              {(['days', 'weeks'] as const).map(unit => (
+                <button
+                  key={unit}
+                  onClick={() => setShootDurationUnit(unit)}
+                  style={{ padding: '10px 14px', background: shootDurationUnit === unit ? 'var(--accent-blue)' : 'var(--bg-surface)', color: shootDurationUnit === unit ? '#fff' : 'var(--text-muted)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', textTransform: 'capitalize' }}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+          {shootDurationUnit === 'weeks' && (extras.shootDays > 0 || (alreadyHas.shootDays && parseFloat(edit.shootDays) > 0)) && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              = {alreadyHas.shootDays ? edit.shootDays : extras.shootDays} shoot days
+            </div>
+          )}
+        </div>
         <Input label="Shooting Days per Week" value={String(extras.shootDaysPerWeek)} onChange={v => upExtras('shootDaysPerWeek', parseInt(v) || 5)} type="number" placeholder="e.g. 5" />
         <Input label="Base City / Primary Location" value={extras.location} onChange={v => upExtras('location', v)} placeholder="e.g. Lagos" />
         {/* blank cell in the 2-col grid to keep alignment */}
@@ -428,21 +433,30 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
               <div style={{ fontSize: 10, color: 'var(--text-ghost)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
                 {dept.code} — {dept.name}
               </div>
-              <input
-                type="number"
-                value={edit.deptPct[dept.code] ?? ''}
-                onChange={e => upDeptPct(dept.code, e.target.value)}
-                onFocus={e => e.target.select()}
-                placeholder="% allocation"
-                style={{ width: '100%', padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-              />
-              {amt !== null ? (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtAmt(amt)}
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 3 }}>—</div>
-              )}
+              <div style={{ display: 'flex', gap: 5 }}>
+                <input
+                  type="number"
+                  value={edit.deptPct[dept.code] ?? ''}
+                  onChange={e => upDeptPct(dept.code, e.target.value)}
+                  onFocus={e => e.target.select()}
+                  placeholder="%"
+                  style={{ flex: 1, minWidth: 0, padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                />
+                {totalBudget > 0 && (
+                  <input
+                    type="number"
+                    value={amt !== null ? Math.round(amt) : ''}
+                    onChange={e => {
+                      const enteredAmt = parseFloat(e.target.value) || 0
+                      const derivedPct = totalBudget > 0 ? (enteredAmt / totalBudget) * 100 : 0
+                      upDeptPct(dept.code, derivedPct > 0 ? derivedPct.toFixed(2) : '')
+                    }}
+                    onFocus={e => e.target.select()}
+                    placeholder={cur4}
+                    style={{ flex: 1.4, minWidth: 0, padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-muted)', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  />
+                )}
+              </div>
             </div>
           )
         })}
@@ -481,124 +495,13 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
     </>
   )
 
-  // ── Stage 5: Crew & Salary ───────────────────────────────────────────────────
-
-  function updateKeyRole(idx: number, field: keyof KeyRoleRate, val: string | number) {
-    setExtras(prev => ({
-      ...prev,
-      keyRoles: prev.keyRoles.map((r, i) => i === idx ? { ...r, [field]: val } : r),
-    }))
-  }
-
-  function addKeyRole() {
-    setExtras(prev => ({
-      ...prev,
-      keyRoles: [...prev.keyRoles, { role: '', rate: 0, unit: 'weekly' }],
-    }))
-  }
-
-  function removeKeyRole(idx: number) {
-    setExtras(prev => ({
-      ...prev,
-      keyRoles: prev.keyRoles.filter((_, i) => i !== idx),
-    }))
-  }
-
-  // Estimated total from entered rates (rough: assume 4 weeks per shoot month)
-  const shootMonths = parseFloat(edit.shootMonths) || 0
-  const estimatedRatesTotal = extras.keyRoles.reduce((sum, r) => {
-    if (!r.rate) return sum
-    const multiplier = r.unit === 'daily' ? (shootMonths * 20) : r.unit === 'weekly' ? (shootMonths * 4) : 1
-    return sum + r.rate * multiplier
-  }, 0)
-  const salaryBudget = extras.totalSalaryBudget
-  const salaryVariance = salaryBudget > 0 && estimatedRatesTotal > 0
-    ? Math.abs(estimatedRatesTotal - salaryBudget) / salaryBudget
-    : null
-
-  const stage5 = (
-    <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Stage 5 — Key Crew Rates</div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-        Enter rates for HOD and key crew. Leave blank for roles you'll fill in later on the Salary Forecast page.
-        Rates detected from your upload are pre-filled.
-      </div>
-
-      {/* Column headers */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px 32px', gap: '0 8px', marginBottom: 6 }}>
-        {['Role', 'Rate', 'Unit', ''].map(h => (
-          <div key={h} style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
-        ))}
-      </div>
-
-      <div style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 2 }}>
-        {extras.keyRoles.map((role, idx) => (
-          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px 32px', gap: '0 8px', marginBottom: 8, alignItems: 'center' }}>
-            <input
-              type="text"
-              value={role.role}
-              onChange={e => updateKeyRole(idx, 'role', e.target.value)}
-              placeholder="Role name"
-              style={{ padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
-            />
-            <input
-              type="number"
-              value={role.rate || ''}
-              onChange={e => updateKeyRole(idx, 'rate', parseFloat(e.target.value) || 0)}
-              placeholder="e.g. 400000"
-              style={{ padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }}
-            />
-            <select
-              value={role.unit}
-              onChange={e => updateKeyRole(idx, 'unit', e.target.value)}
-              style={{ padding: '8px 8px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
-            >
-              <option value="weekly">Weekly</option>
-              <option value="daily">Daily</option>
-              <option value="fixed">Fixed</option>
-            </select>
-            <button
-              onClick={() => removeKeyRole(idx)}
-              style={{ width: 28, height: 34, background: 'transparent', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--accent-red)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >×</button>
-          </div>
-        ))}
-      </div>
-
-      <button
-        onClick={addKeyRole}
-        style={{ marginTop: 6, padding: '8px 16px', background: 'transparent', border: '1px dashed var(--border-default)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, width: '100%' }}
-      >
-        + Add role
-      </button>
-
-      {/* Total salary budget */}
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
-        <Input
-          label="Total Salary Budget (all crew & cast)"
-          value={String(extras.totalSalaryBudget || '')}
-          onChange={v => upExtras('totalSalaryBudget', parseFloat(v) || 0)}
-          type="number"
-          placeholder="e.g. 45000000"
-        />
-        {salaryVariance !== null && salaryVariance > 0.1 && (
-          <div style={{ fontSize: 11, color: 'var(--accent-amber)', marginTop: -6, marginBottom: 10, lineHeight: 1.6 }}>
-            ⚠ Entered rates total approximately {edit.currency || '₦'}{estimatedRatesTotal.toLocaleString('en', { maximumFractionDigits: 0 })}
-            {' '}over {shootMonths} shoot month(s). Total salary budget is {edit.currency || '₦'}{salaryBudget.toLocaleString('en', { maximumFractionDigits: 0 })}.
-            You may have unaccounted roles.
-          </div>
-        )}
-      </div>
-    </>
-  )
-
-  // ── Stage 6: Funding Installments ───────────────────────────────────────────
+  // ── Stage 5: Funding Installments ───────────────────────────────────────────
 
   const instTotal = extras.installments.reduce((s, i) => s + i.pct, 0)
 
-  const stage6 = (
+  const stage5funding = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Stage 6 — Funding Installments</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Stage 5 — Funding Installments</div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Enter the funding installment structure — when each tranche arrives and as what percentage of the total budget.</div>
 
       {extras.installments.map((inst, i) => (
@@ -651,7 +554,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
     </>
   )
 
-  const stageContent = [stage1, stage2, stage3, stage4, stage5, stage6][stage - 1]
+  const stageContent = [stage1, stage2, stage3, stage4, stage5funding][stage - 1]
 
   return (
     <div style={shell}>

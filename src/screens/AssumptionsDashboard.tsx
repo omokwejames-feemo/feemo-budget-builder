@@ -10,6 +10,7 @@ import { JURIYA_FULL, BC_FULL } from '../export/templateData'
 import { applyFullTemplate, applyParsedBudget } from '../export/applyTemplate'
 import { parseUploadedBudget } from '../export/parseUploadedBudget'
 import { Issue } from '../hooks/useIssueDetector'
+import { formatCurrency } from '../utils/formatCurrency'
 
 const CURRENCIES = [
   { value: '₦', label: '₦  NGN — Nigerian Naira', foreign: false },
@@ -17,10 +18,9 @@ const CURRENCIES = [
   { value: '£', label: '£  GBP — British Pound',  foreign: true  },
 ]
 
-function fmt(n: number, currency = '₦') {
+function fmt(n: number, currency = 'NGN') {
   if (!n) return '—'
-  const sym = currency || '₦'
-  return `${sym}${n.toLocaleString()}`
+  return formatCurrency(n, currency)
 }
 
 function IssueCard({ issue }: { issue: Issue }) {

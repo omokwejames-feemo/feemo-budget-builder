@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.0.0 — Batch 14: Production Dashboard, Crash Recovery, Smart Upload, Wizard Overhaul (2026-04-25)
+
+- **Production Dashboard (new page)**: Dedicated command-centre page showing budget health KPI row (Total Budget, Total Spent, Remaining, % Used with colour-coded progress bar), department spend-vs-budget bar chart, shoot progress block, full department status table (ON TRACK / AT RISK / OVER BUDGET thresholds), recent transactions panel, and live alerts for unsigned schedules and at-risk departments. All values derive from live project state — no manual entry required.
+- **React Error Boundaries**: Every screen and region is now wrapped in an error boundary. Crashes are caught gracefully with a user-friendly error card, a "Reload Section" button, and an automatic error log written to disk. The Electron main process also traps `uncaughtException` and `unhandledRejection` with restart dialogs.
+- **Crash recovery**: Budget state is auto-saved to a timestamped `.feemo` recovery file on unload if there are unsaved changes. On next launch the app detects these files and offers to restore them.
+- **Universal currency formatting**: All monetary values across every screen now use the shared `formatCurrency()` utility backed by `Intl.NumberFormat`. Accepts both ISO codes (NGN, USD, GBP, EUR) and legacy currency symbols (₦, $, £, €).
+- **Smart Upload redesign — 5-stage flow**: File selection → Page Declaration checklist (declare what sheet types your file contains) → Parsing with animated progress bar → Error recovery → Confirmation. Large files (>500 KB) are deferred off the renderer tick to prevent freezes.
+- **Shoot days default to 0**: New projects start with 0 shoot days. The topbar pill always shows the current count (including zero) rather than hiding the field.
+- **Date picker — three-part selector**: The single `<input type="month">` is replaced with a Month dropdown, Day numeric input, and Year dropdown. Stores ISO YYYY-MM-DD; day field is optional.
+- **Wizard weeks/days toggle**: The shoot duration field in Stage 2 of the Budget Questionnaire Wizard now has a days/weeks segmented toggle. Switching units auto-converts the current value; the store always receives days.
+- **Bidirectional dept allocation**: Stage 4 of the wizard shows both a percentage field and a currency amount field per department. Editing either one derives and updates the other in real time.
+- **Key cast rates removed from wizard**: Stage 5 (Crew & Salary) has been removed from the wizard entirely. Salary data is collected via the dedicated Salary Forecast page after import.
+- **File menu Open Project**: "Open Project" (Cmd+O) is now in the native File menu above "New Project", matching user expectation for a macOS/Windows app.
+- **Unsaved changes dialog**: Starting a new project when unsaved changes exist shows a modal — Save and Start New / Discard Changes / Go Back.
+
 ## v1.7.1 — Fix Batch 10: Atomic Upload, Salary Merge, Pre-Pop Summary, Audit Log (2026-04-24)
 
 - **Atomic budget population**: Uploading a workbook no longer triggers the "Budget Exceeded" dialog mid-import. A suppression flag (`isPopulatingFromUpload`) is raised before writing any data and cleared after all fields are committed. `totalBudget` is written first so every subsequent line-item comparison has the correct target.

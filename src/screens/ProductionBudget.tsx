@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
 import { useBudgetStore, DEPARTMENTS, DeptCode, LineItem, getDeptTarget, getDeptActual } from '../store/budgetStore'
 import type { UploadAuditField } from '../store/budgetStore'
+import { formatCurrency, formatAmount } from '../utils/formatCurrency'
 
 let idCounter = 1000
 function newId() { return String(++idCounter) }
 
-function fmtCur(n: number, cur = 'N') {
-  if (!n && n !== 0) return '—'
-  return `${cur}${n.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+// Legacy wrappers kept for backward compat with cell rendering below
+function fmtCur(n: number, cur = 'NGN') {
+  return formatCurrency(n, cur)
 }
 
 function fmtNum(n: number) {
-  if (!n) return '—'
-  return n.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return formatAmount(n)
 }
 
 function EditableCell({ value, onChange }: {

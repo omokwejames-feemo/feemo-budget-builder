@@ -42,6 +42,16 @@ declare global {
       openXlsxBudget: () => Promise<{ success: boolean; filePath?: string; buffer?: number[] }>
       // In-app fresh start
       onNewProjectFresh: (cb: () => void) => void
+      // File > Open Project from menu
+      onMenuOpenProject: (cb: () => void) => void
+      // Crash recovery — Batch 14 / S7
+      logError: (message: string) => Promise<{ success: boolean }>
+      saveCrashRecovery: (data: string) => Promise<{ success: boolean; path?: string }>
+      listCrashRecoveries: () => Promise<{ success: boolean; files: string[] }>
+      loadCrashRecovery: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
+      dismissCrashRecovery: (filePath: string) => Promise<{ success: boolean }>
+      restartApp: () => Promise<void>
+      onMainProcessError: (cb: (info: { type: string; message: string }) => void) => void
     }
   }
 }

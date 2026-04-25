@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { useBudgetStore, DEPARTMENTS, ExpenditureDeduction } from '../store/budgetStore'
 import { getDeptTarget } from '../store/budgetStore'
+import { formatAmount } from '../utils/formatCurrency'
 
 function fmt(n: number) {
-  return n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatAmount(n)
 }
 
 function uid() { return Math.random().toString(36).slice(2) }

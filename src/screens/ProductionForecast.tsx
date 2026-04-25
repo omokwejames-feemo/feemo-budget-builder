@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, Timeline, getDeptTarget, getTotalMonths, getMonthLabel, getMonthPhase, DEPT_ACTIVE_PHASES } from '../store/budgetStore'
 import { Issue } from '../hooks/useIssueDetector'
+import { formatCurrency } from '../utils/formatCurrency'
 
-function fmtN(n: number, cur = 'N', brackets = false) {
+function fmtN(n: number, cur = 'NGN', brackets = false) {
   if (n === 0) return '—'
   const abs = Math.abs(n)
-  const s = `${cur}${abs.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  const s = formatCurrency(abs, cur)
   if (n < 0 && brackets) return `(${s})`
   return n < 0 ? `-${s}` : s
 }

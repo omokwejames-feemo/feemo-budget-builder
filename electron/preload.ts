@@ -83,6 +83,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('new-project-fresh', () => cb())
   },
 
+  // ── File > Open Project from menu ─────────────────────────────────────────
+  onMenuOpenProject: (cb: () => void) => {
+    ipcRenderer.removeAllListeners('menu-open-project')
+    ipcRenderer.on('menu-open-project', () => cb())
+  },
+
+  // ── Crash recovery ────────────────────────────────────────────────────────
+  logError: (message: string) =>
+    ipcRenderer.invoke('log-error', message),
+  saveCrashRecovery: (data: string) =>
+    ipcRenderer.invoke('save-crash-recovery', data),
+  listCrashRecoveries: () =>
+    ipcRenderer.invoke('list-crash-recoveries'),
+  loadCrashRecovery: (filePath: string) =>
+    ipcRenderer.invoke('load-crash-recovery', filePath),
+  dismissCrashRecovery: (filePath: string) =>
+    ipcRenderer.invoke('dismiss-crash-recovery', filePath),
+  restartApp: () =>
+    ipcRenderer.invoke('restart-app'),
+
+  // ── Main process error events ─────────────────────────────────────────────
+  onMainProcessError: (cb: (info: { type: string; message: string }) => void) => {
+    ipcRenderer.removeAllListeners('main-process-error')
+    ipcRenderer.on('main-process-error', (_event, info) => cb(info))
+  },
+
   // ── Google Drive ─────────────────────────────────────────────────────────
   gdriveSetCredentials: (clientId: string, clientSecret: string) =>
     ipcRenderer.invoke('gdrive-set-credentials', { clientId, clientSecret }),

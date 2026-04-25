@@ -3,13 +3,14 @@ import {
   useBudgetStore, DEPARTMENTS, DeptCode, SalaryRole,
   getTotalMonths, getMonthLabel, getMonthPhase
 } from '../store/budgetStore'
+import { formatCurrency } from '../utils/formatCurrency'
 
 let rid = 2000
 function newRoleId() { return String(++rid) }
 
-function fmt(n: number, cur = 'N') {
+function fmt(n: number, cur = 'NGN') {
   if (!n) return '—'
-  return `${cur}${n.toLocaleString('en', { maximumFractionDigits: 0 })}`
+  return formatCurrency(n, cur)
 }
 
 const PHASES = ['dev', 'pre', 'shoot', 'post', 'all'] as const

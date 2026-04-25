@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useBudgetStore, DEPARTMENTS, DeptCode, getDeptTarget, getDeptActual, getTotalMonths } from '../store/budgetStore'
 import { generateBudgetXlsx } from '../export/generateBudget'
+import { formatCurrency } from '../utils/formatCurrency'
 
-function fmt(n: number, cur = 'N') {
-  if (!n) return `${cur}0`
-  return `${cur}${n.toLocaleString('en', { maximumFractionDigits: 0 })}`
+function fmt(n: number, cur = 'NGN') {
+  return formatCurrency(n, cur)
 }
 
 
