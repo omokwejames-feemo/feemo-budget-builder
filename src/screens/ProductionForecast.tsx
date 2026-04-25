@@ -162,6 +162,20 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
 
   const grandReceipts = totalReceiptsPerMonth.reduce((s, v) => s + v, 0)
   const grandPayments = totalPaymentsPerMonth.reduce((s, v) => s + v, 0)
+
+  // Salary overrun: depts where salary total > dept allocation
+  const salaryOverrunDepts = DEPARTMENTS.map(dept => {
+    const code = dept.code as DeptCode
+    const target = getDeptTarget(code, store)
+    if (target <= 0) return null
+    const deptSalaryRoles = salaryRoles.filter(r => r.deptCode === code)
+    const totalSalary = deptSalaryRoles.reduce((sum, r) =>
+      sum + Object.values(r.monthlyAmounts).reduce((s, v) => s + v, 0), 0)
+    if (totalSalary <= target) return null
+    return { code, name: dept.name, target, totalSalary, overBy: totalSalary - target }
+  }).filter(Boolean) as { code: string; name: string; target: number; totalSalary: number; overBy: number }[]
+
+  const totalSalaryOverrun = salaryOverrunDepts.reduce((s, d) => s + d.overBy, 0)
   const finalBalance = closingBalance[closingBalance.length - 1] ?? 0
   const lowestBalance = Math.min(...closingBalance)
 
@@ -274,6 +288,28 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
             >
               Apply Fix
             </button>
+          </div>
+        </div>
+      )}
+
+      {salaryOverrunDepts.length > 0 && (
+        <div style={{ background: 'rgba(240,96,96,0.08)', border: '1px solid rgba(240,96,96,0.3)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--red)', marginBottom: 8 }}>
+            ⚠ Salary exceeds dept allocation in {salaryOverrunDepts.length} department{salaryOverrunDepts.length > 1 ? 's' : ''} — total overrun: {fmtN(totalSalaryOverrun, cur)}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
+            These departments have more salary entered in the Salary Forecast than their budget allocation allows. This is why Total Payments exceeds the budget.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {salaryOverrunDepts.map(d => (
+              <div key={d.code} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)', minWidth: 30 }}>{d.code}</span>
+                <span style={{ color: 'var(--text2)', minWidth: 140 }}>{d.name}</span>
+                <span style={{ color: 'var(--text3)' }}>Alloc: <strong style={{ color: 'var(--text)' }}>{fmtN(d.target, cur)}</strong></span>
+                <span style={{ color: 'var(--text3)' }}>Salary: <strong style={{ color: 'var(--red)' }}>{fmtN(d.totalSalary, cur)}</strong></span>
+                <span style={{ color: 'var(--red)', fontWeight: 700 }}>+{fmtN(d.overBy, cur)} over</span>
+              </div>
+            ))}
           </div>
         </div>
       )}

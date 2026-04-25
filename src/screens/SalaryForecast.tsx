@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   useBudgetStore, DEPARTMENTS, DeptCode, SalaryRole,
-  getTotalMonths, getMonthLabel, getMonthPhase
+  getTotalMonths, getMonthLabel, getMonthPhase, getDeptTarget
 } from '../store/budgetStore'
 import { formatCurrency } from '../utils/formatCurrency'
 
@@ -62,13 +62,20 @@ export default function SalaryForecast() {
     sum + Object.values(r.monthlyAmounts).reduce((s, v) => s + v, 0), 0
   )
 
-  // Salary allocation: sum of budgeted line items for crew/cast-related departments
-  const SALARY_DEPT_CODES = ['C', 'D', 'E', 'F'] as const
-  const salaryAllocation = SALARY_DEPT_CODES.reduce((sum, code) => {
-    const items = store.lineItems[code as import('../store/budgetStore').DeptCode] || []
-    return sum + items.reduce((s, i) => s + (i.rate || 0) * (i.qty || 1), 0)
-  }, 0)
-  const salaryOver = salaryAllocation > 0 && grandTotal > salaryAllocation
+  // Per-dept salary vs allocation comparison
+  const deptSalaryBreakdown = DEPARTMENTS.map(dept => {
+    const code = dept.code as DeptCode
+    const deptRoles = salaryRoles.filter(r => r.deptCode === code)
+    const salaryTotal = deptRoles.reduce((sum, r) =>
+      sum + Object.values(r.monthlyAmounts).reduce((s, v) => s + v, 0), 0)
+    if (salaryTotal === 0) return null
+    const budget = getDeptTarget(code, store)
+    const remaining = budget - salaryTotal
+    return { code, name: dept.name, budget, salaryTotal, remaining, over: remaining < 0 }
+  }).filter(Boolean) as { code: string; name: string; budget: number; salaryTotal: number; remaining: number; over: boolean }[]
+
+  const totalSalaryAllocation = deptSalaryBreakdown.reduce((s, d) => s + d.budget, 0)
+  const salaryOver = deptSalaryBreakdown.some(d => d.over)
 
   const cumulativeMonthly = months.reduce<number[]>((acc, _, i) => {
     acc.push((acc[i - 1] || 0) + monthlyTotals[i])
@@ -112,20 +119,71 @@ export default function SalaryForecast() {
         ))}
       </div>
 
-      {salaryOver && (
-        <div style={{ background: 'rgba(240,96,96,0.08)', border: '1px solid rgba(240,96,96,0.25)', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12 }}>🔴</span>
-          <span style={{ fontSize: 12, color: 'var(--text2)' }}>
-            <strong style={{ color: 'var(--red)' }}>OVER</strong>
-            {' '}Salary total {fmt(grandTotal, cur)} exceeds crew/cast budget allocation of {fmt(salaryAllocation, cur)} by {fmt(grandTotal - salaryAllocation, cur)}.
-          </span>
+      {deptSalaryBreakdown.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', fontWeight: 700, fontSize: 12, letterSpacing: 0.5, color: 'var(--text2)', textTransform: 'uppercase' }}>
+            Salary vs Dept Allocation
+          </div>
+          <div className="table-wrap">
+            <table style={{ fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 60 }}>Dept</th>
+                  <th style={{ minWidth: 120 }}>Name</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>Allocation Budget</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>Salary Total</th>
+                  <th style={{ width: 140, textAlign: 'right' }}>Remaining</th>
+                  <th style={{ width: 80, textAlign: 'center' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deptSalaryBreakdown.map(d => (
+                  <tr key={d.code}>
+                    <td className="td-mono" style={{ fontWeight: 700, color: 'var(--accent)' }}>{d.code}</td>
+                    <td>{d.name}</td>
+                    <td className="td-num">{d.budget > 0 ? fmt(d.budget, cur) : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
+                    <td className="td-num" style={{ color: d.over ? 'var(--red)' : undefined }}>{fmt(d.salaryTotal, cur)}</td>
+                    <td className="td-num" style={{ color: d.over ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
+                      {d.budget > 0 ? fmt(Math.abs(d.remaining), cur) : '—'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {d.budget <= 0
+                        ? <span style={{ fontSize: 11, color: 'var(--text3)' }}>no alloc</span>
+                        : d.over
+                          ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)' }}>OVER</span>
+                          : <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)' }}>OK</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="row-subtotal">
+                  <td colSpan={2}>TOTAL</td>
+                  <td className="td-num">{fmt(totalSalaryAllocation, cur)}</td>
+                  <td className="td-num" style={{ color: salaryOver ? 'var(--red)' : undefined }}>{fmt(grandTotal, cur)}</td>
+                  <td className="td-num" style={{ color: salaryOver ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
+                    {totalSalaryAllocation > 0 ? fmt(Math.abs(totalSalaryAllocation - grandTotal), cur) : '—'}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {totalSalaryAllocation > 0
+                      ? salaryOver
+                        ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)' }}>OVER</span>
+                        : <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)' }}>OK</span>
+                      : null}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <button className="btn btn-primary btn-sm" onClick={addRole}>+ Add Role</button>
         <span style={{ fontSize: 12, color: 'var(--text2)' }}>
           Grand Total: <strong style={{ color: salaryOver ? 'var(--red)' : 'var(--text)' }}>{fmt(grandTotal, cur)}</strong>
-          {salaryAllocation > 0 && <span style={{ color: 'var(--text2)', marginLeft: 8 }}>/ {fmt(salaryAllocation, cur)} allocated</span>}
+          {totalSalaryAllocation > 0 && <span style={{ color: 'var(--text2)', marginLeft: 8 }}>/ {fmt(totalSalaryAllocation, cur)} allocated</span>}
         </span>
       </div>
 
