@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import {
   useBudgetStore, DEPARTMENTS, DeptCode, SalaryRole,
-  getTotalMonths, getMonthLabel, getMonthPhase, getDeptTarget
+  getTotalMonths, getMonthLabel, getMonthPhase, getDeptTarget,
+  DEPT_ACTIVE_PHASES
 } from '../store/budgetStore'
 import { formatCurrency } from '../utils/formatCurrency'
 
@@ -32,14 +33,65 @@ function isPhaseActive(role: SalaryRole, monthPhase: 'dev' | 'pre' | 'shoot' | '
   return false
 }
 
+const PHASE_MAP: Record<string, SalaryRole['phase']> = {
+  'DEV': 'dev', 'PRE-PROD': 'pre', 'SHOOT': 'shoot', 'POST': 'post',
+}
+
 export default function SalaryForecast() {
   const store = useBudgetStore()
-  const { timeline, project, salaryRoles, addSalaryRole, updateSalaryRole, removeSalaryRole } = store
+  const { timeline, project, salaryRoles, addSalaryRole, updateSalaryRole, removeSalaryRole, setSalaryRoles } = store
   const totalMonths = getTotalMonths(timeline)
   const cur = project.currency || 'N'
   const months = Array.from({ length: totalMonths }, (_, i) => i + 1)
 
   const [filterDept, setFilterDept] = useState<DeptCode | 'all'>('all')
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false)
+
+  function buildSyncedRoles(): SalaryRole[] {
+    const newRoles: SalaryRole[] = []
+    DEPARTMENTS.forEach(dept => {
+      const code = dept.code as DeptCode
+      const items = store.lineItems[code] || []
+      if (items.length === 0) return
+
+      const activePhaseLabels = DEPT_ACTIVE_PHASES[code] ?? ['DEV', 'PRE-PROD', 'SHOOT', 'POST']
+      const activeMonths = months.filter(m =>
+        activePhaseLabels.includes(getMonthPhase(m, timeline))
+      )
+      if (activeMonths.length === 0) return
+
+      const rolePhase: SalaryRole['phase'] =
+        activePhaseLabels.length === 1
+          ? (PHASE_MAP[activePhaseLabels[0]] ?? 'all')
+          : 'all'
+
+      items.forEach((item, idx) => {
+        const total = (item.no ?? 1) * (item.qty ?? 0) * (item.rate ?? 0)
+        if (total === 0) return
+        const perMonth = Math.round(total / activeMonths.length)
+        const monthlyAmounts: Record<number, number> = {}
+        activeMonths.forEach((m, i) => {
+          monthlyAmounts[m] = i === activeMonths.length - 1
+            ? total - perMonth * (activeMonths.length - 1)
+            : perMonth
+        })
+        newRoles.push({
+          id: `sync_${code}_${item.id}`,
+          schedNo: item.schedNo || `${code}${idx + 1}`,
+          role: item.detail,
+          deptCode: code,
+          phase: rolePhase,
+          monthlyAmounts,
+        })
+      })
+    })
+    return newRoles
+  }
+
+  function applySync() {
+    setSalaryRoles(buildSyncedRoles())
+    setShowSyncConfirm(false)
+  }
 
   function addRole() {
     addSalaryRole({
@@ -180,12 +232,47 @@ export default function SalaryForecast() {
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <button className="btn btn-primary btn-sm" onClick={addRole}>+ Add Role</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary btn-sm" onClick={addRole}>+ Add Role</button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setShowSyncConfirm(true)}
+            title="Replace all salary roles with amounts from the Budget line items, spread evenly across each dept's active months"
+          >
+            Sync from Budget
+          </button>
+        </div>
         <span style={{ fontSize: 12, color: 'var(--text2)' }}>
           Grand Total: <strong style={{ color: salaryOver ? 'var(--red)' : 'var(--text)' }}>{fmt(grandTotal, cur)}</strong>
           {totalSalaryAllocation > 0 && <span style={{ color: 'var(--text2)', marginLeft: 8 }}>/ {fmt(totalSalaryAllocation, cur)} allocated</span>}
         </span>
       </div>
+
+      {showSyncConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: 28, maxWidth: 480, width: '92%', boxShadow: '0 8px 40px rgba(0,0,0,0.7)' }}>
+            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>Sync Salary Roles from Budget</div>
+            <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 16 }}>
+              This will <strong style={{ color: 'var(--text)' }}>replace all existing salary roles</strong> with entries generated directly from your Budget line items.
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 14px', marginBottom: 20, fontSize: 12, color: 'var(--text2)', lineHeight: 1.8 }}>
+              <div>• Each line item becomes a salary role in its department</div>
+              <div>• The total (no × qty × rate) is spread evenly across the dept's active phase months</div>
+              <div>• After syncing, every role remains fully editable — adjust any monthly figure as needed</div>
+              <div>• Run sync again any time you update the Budget to re-align</div>
+            </div>
+            {salaryRoles.length > 0 && (
+              <div style={{ background: 'rgba(240,96,96,0.08)', border: '1px solid rgba(240,96,96,0.25)', borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
+                ⚠ Your current <strong style={{ color: 'var(--text)' }}>{salaryRoles.length} salary role{salaryRoles.length > 1 ? 's' : ''}</strong> will be overwritten.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setShowSyncConfirm(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={applySync}>Sync Now</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {salaryRoles.length === 0 ? (
         <div className="card">
