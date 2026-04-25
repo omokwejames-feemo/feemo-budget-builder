@@ -29,7 +29,7 @@ const S = {
   sec:    { fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' },
   grid2:  { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' } as React.CSSProperties,
   row:    { display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16 } as React.CSSProperties,
-  btnPrimary: { padding: '11px 28px', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' } as React.CSSProperties,
+  btnPrimary: { padding: '11px 28px', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' } as React.CSSProperties,
   btnGhost:   { padding: '11px 20px', background: 'transparent', color: 'var(--text3)', fontWeight: 600, fontSize: 14, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' } as React.CSSProperties,
 }
 
@@ -834,7 +834,7 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
                 {isSparse && !showWizard && (
                   <button
                     onClick={() => setShowWizard(true)}
-                    style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                    style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}
                   >
                     Open Budget Wizard
                   </button>

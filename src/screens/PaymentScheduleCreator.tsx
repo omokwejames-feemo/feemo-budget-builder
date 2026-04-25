@@ -105,7 +105,7 @@ function ScheduleEditor({ schedule, onUpdate, onDelete, onExport, projectTitle, 
           marginLeft: 'auto',
           fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
           background: schedule.status === 'approved' ? 'rgba(26,122,74,0.12)' : schedule.status === 'exported' ? 'rgba(52,152,219,0.12)' : 'rgba(245,166,35,0.08)',
-          color: schedule.status === 'approved' ? 'var(--green)' : schedule.status === 'exported' ? '#3498db' : 'var(--accent)',
+          color: schedule.status === 'approved' ? 'var(--green)' : schedule.status === 'exported' ? 'var(--accent-blue)' : 'var(--accent)',
           border: `1px solid ${schedule.status === 'approved' ? 'rgba(26,122,74,0.25)' : schedule.status === 'exported' ? 'rgba(52,152,219,0.25)' : 'rgba(245,166,35,0.2)'}`,
         }}>
           {schedule.status.toUpperCase()}

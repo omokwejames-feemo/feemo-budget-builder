@@ -19,10 +19,10 @@ function Btn({ onClick, disabled, children, variant = 'primary' }: {
       disabled={disabled}
       style={{
         width: '100%', padding: '13px 0',
-        background: disabled ? '#333' : variant === 'primary' ? '#f5a623' : 'transparent',
-        color: disabled ? '#666' : variant === 'primary' ? '#000' : '#9a9a9a',
-        fontWeight: 700, fontSize: 14,
-        border: variant === 'ghost' ? '1px solid #333' : 'none',
+        background: disabled ? 'var(--bg-elevated)' : variant === 'primary' ? 'var(--accent-blue)' : 'transparent',
+        color: disabled ? 'var(--text-ghost)' : variant === 'primary' ? '#fff' : 'var(--text-secondary)',
+        fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)',
+        border: variant === 'ghost' ? '1px solid var(--border-default)' : 'none',
         borderRadius: 8, cursor: disabled ? 'default' : 'pointer',
         marginBottom: 10,
       }}
@@ -36,7 +36,7 @@ function Field({ label, value, onChange, type = 'text', placeholder, autoFocus, 
 }) {
   return (
     <div style={{ marginBottom: 14, textAlign: 'left' }}>
-      <div style={{ fontSize: 11, color: '#666', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
       <input
         type={type} value={value} autoFocus={autoFocus}
         onChange={e => onChange(e.target.value)}
@@ -44,9 +44,9 @@ function Field({ label, value, onChange, type = 'text', placeholder, autoFocus, 
         placeholder={placeholder}
         style={{
           width: '100%', padding: '11px 14px',
-          background: '#1e1e1e', border: '1px solid #333',
-          borderRadius: 8, color: '#fff', fontSize: 14,
-          outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+          background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
+          borderRadius: 8, color: 'var(--text-primary)', fontSize: 13,
+          outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-ui)',
         }}
       />
     </div>
@@ -54,7 +54,7 @@ function Field({ label, value, onChange, type = 'text', placeholder, autoFocus, 
 }
 
 function ErrMsg({ msg }: { msg: string }) {
-  return <div style={{ fontSize: 12, color: '#cc2233', marginBottom: 14, fontWeight: 600, textAlign: 'center' }}>{msg}</div>
+  return <div style={{ fontSize: 12, color: 'var(--accent-red)', marginBottom: 14, fontWeight: 600, textAlign: 'center' }}>{msg}</div>
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -163,38 +163,38 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
   // ─── Shared layout ──────────────────────────────────────────────────────────
 
   const shell: React.CSSProperties = {
-    position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0a0a',
+    position: 'fixed', inset: 0, zIndex: 99999, background: 'var(--bg-base)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
   }
   const card: React.CSSProperties = {
-    background: '#141414', border: '1px solid #2a2a2a',
+    background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
     borderRadius: 16, padding: '44px 48px',
     maxWidth: 460, width: '90%', textAlign: 'center',
-    boxShadow: '0 24px 80px rgba(0,0,0,0.8)',
+    boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
   }
   const logo = (
     <div style={{ marginBottom: 24 }}>
       <img src="./feemo-logo.png" alt="Feemovision"
-        style={{ width: 64, height: 64, objectFit: 'contain' }}
+        style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 12 }}
         onError={e => {
           const el = e.currentTarget; el.style.display = 'none'
           const fb = el.nextElementSibling as HTMLElement | null
           if (fb) fb.style.display = 'inline-flex'
         }}
       />
-      <div style={{ display: 'none', width: 64, height: 64, margin: '0 auto', background: '#f5a623', color: '#000', fontWeight: 800, fontSize: 32, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>F</div>
+      <div style={{ display: 'none', width: 64, height: 64, margin: '0 auto', background: 'var(--accent-blue)', color: '#fff', fontWeight: 700, fontSize: 32, fontFamily: 'var(--font-mono)', borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>F</div>
     </div>
   )
   const heading = (
     <>
-      <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Feemo Budget Manager</div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#f5a623', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 20 }}>Beta Access</div>
+      <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Feemo Budget Manager</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 20 }}>Beta Access</div>
     </>
   )
   const footer = (
-    <div style={{ marginTop: 12, fontSize: 11, color: '#444' }}>
+    <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-ghost)' }}>
       Keys issued by Feemovision Limited ·{' '}
-      <a href="mailto:james@feemovision.com" style={{ color: '#555', textDecoration: 'none' }}>james@feemovision.com</a>
+      <a href="mailto:james@feemovision.com" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>james@feemovision.com</a>
     </div>
   )
 
@@ -202,7 +202,7 @@ export default function BetaGate({ onGranted }: BetaGateProps) {
     return (
       <div style={shell}><div style={card}>
         {logo}{heading}
-        <div style={{ color: '#555', fontSize: 13 }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
           {stage === 'checking' ? 'Checking session…' : `Sending verification code to ${pendingEmail}…`}
         </div>
       </div></div>

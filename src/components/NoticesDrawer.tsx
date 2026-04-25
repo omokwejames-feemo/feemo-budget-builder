@@ -14,11 +14,11 @@ const TYPE_ICON: Record<AppNotice['type'], string> = {
 }
 
 const TYPE_COLOUR: Record<AppNotice['type'], string> = {
-  rounding:   '#f5a623',
-  conflict:   '#ff6b6b',
-  confidence: '#888',
-  wizard:     '#a87fff',
-  info:       '#4e9fff',
+  rounding:   'var(--accent-amber)',
+  conflict:   'var(--accent-red)',
+  confidence: 'var(--text-muted)',
+  wizard:     'var(--accent-purple)',
+  info:       'var(--accent-blue)',
 }
 
 function fmt(iso: string) {

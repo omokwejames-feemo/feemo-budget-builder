@@ -48,20 +48,20 @@ interface Props {
 
 const shell: React.CSSProperties = {
   position: 'fixed', inset: 0, zIndex: 99999,
-  background: 'rgba(0,0,0,0.85)',
+  background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   overflow: 'auto',
 }
 const card: React.CSSProperties = {
-  background: '#141414', border: '1px solid #2a2a2a',
+  background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
   borderRadius: 16, padding: '36px 44px',
   width: '92%', maxWidth: 680,
   margin: '32px auto',
-  boxShadow: '0 24px 80px rgba(0,0,0,0.8)',
+  boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{children}</div>
+  return <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{children}</div>
 }
 
 function Input({ label, value, onChange, type = 'text', placeholder }: {
@@ -75,7 +75,7 @@ function Input({ label, value, onChange, type = 'text', placeholder }: {
         type={type} value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder ?? ''}
-        style={{ width: '100%', padding: '10px 13px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 7, color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+        style={{ width: '100%', padding: '10px 13px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-ui)' }}
       />
     </div>
   )
@@ -90,7 +90,7 @@ function Select({ label, value, onChange, options }: {
       <Label>{label}</Label>
       <select
         value={value} onChange={e => onChange(e.target.value)}
-        style={{ width: '100%', padding: '10px 13px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 7, color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+        style={{ width: '100%', padding: '10px 13px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font-ui)' }}
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -107,9 +107,9 @@ function StageDot({ stage, active, done }: { stage: number; active: boolean; don
     <div style={{
       width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 11, fontWeight: 700, flexShrink: 0,
-      background: done ? '#4ec24e' : active ? '#f5a623' : '#222',
-      color: done || active ? '#000' : '#555',
-      border: `2px solid ${done ? '#4ec24e' : active ? '#f5a623' : '#333'}`,
+      background: done ? 'var(--accent-green)' : active ? 'var(--accent-blue)' : 'var(--bg-surface)',
+      color: done || active ? '#fff' : 'var(--text-muted)',
+      border: `2px solid ${done ? 'var(--accent-green)' : active ? 'var(--accent-blue)' : 'var(--border-default)'}`,
     }}>
       {done ? '✓' : stage}
     </div>
@@ -224,8 +224,8 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
     return (
       <div style={shell}>
         <div style={{ ...card, maxWidth: 700 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Wizard Complete</div>
-          <div style={{ fontSize: 13, color: '#777', marginBottom: 24 }}>Review all collected data before applying to your budget.</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Wizard Complete</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>Review all collected data before applying to your budget.</div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
             {[
@@ -242,28 +242,28 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
               ['Shoot Months',    edit.shootMonths || '—'],
               ['Post Months',     edit.postMonths || '—'],
             ].map(([label, val]) => (
-              <div key={label} style={{ background: '#1e1e1e', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-                <div style={{ fontSize: 13, color: '#ccc' }}>{String(val)}</div>
+              <div key={label} style={{ background: 'var(--bg-surface)', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ fontSize: 10, color: 'var(--text-ghost)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{String(val)}</div>
               </div>
             ))}
           </div>
 
-          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
             Dept coverage: {deptTotal.toFixed(1)}%
             {totalBudget > 0 && ` · Total dept amount: ${deptTotalAmount.toLocaleString()}`}
           </div>
           {instTotal !== 100 && extras.installments.length > 0 && (
-            <div style={{ fontSize: 12, color: '#f5a623', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--accent-amber)', marginBottom: 8 }}>
               ⚠ Installment percentages sum to {instTotal}% (should be 100%)
             </div>
           )}
 
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16 }}>
-            <button onClick={() => setShowSummary(false)} style={{ padding: '11px 20px', background: 'transparent', color: '#777', fontWeight: 600, fontSize: 14, border: '1px solid #333', borderRadius: 8, cursor: 'pointer' }}>
+            <button onClick={() => setShowSummary(false)} style={{ padding: '11px 20px', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 14, border: '1px solid var(--border-default)', borderRadius: 8, cursor: 'pointer' }}>
               Back to Wizard
             </button>
-            <button onClick={() => onComplete(edit, extras)} style={{ padding: '11px 28px', background: '#f5a623', color: '#000', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+            <button onClick={() => onComplete(edit, extras)} style={{ padding: '11px 28px', background: 'var(--accent-blue)', color: '#fff', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}>
               Apply to Budget →
             </button>
           </div>
@@ -284,10 +284,10 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
           <div key={s} style={{ display: 'flex', alignItems: 'center', flex: idx < STAGE_LABELS.length - 1 ? 1 : 0 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <StageDot stage={s} active={active} done={done} />
-              <span style={{ fontSize: 9, color: active ? '#f5a623' : done ? '#4ec24e' : '#444', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{label}</span>
+              <span style={{ fontSize: 9, color: active ? 'var(--accent-blue)' : done ? 'var(--accent-green)' : 'var(--text-ghost)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{label}</span>
             </div>
             {idx < STAGE_LABELS.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? '#4ec24e' : '#222', margin: '0 6px', marginBottom: 18 }} />
+              <div style={{ flex: 1, height: 2, background: done ? 'var(--accent-green)' : 'var(--border-subtle)', margin: '0 6px', marginBottom: 18 }} />
             )}
           </div>
         )
@@ -296,21 +296,21 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
   )
 
   const navRow = (
-    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 20, borderTop: '1px solid #222' }}>
+    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 20, borderTop: '1px solid var(--border-subtle)' }}>
       {stage > 1 && (
-        <button onClick={() => setStage(s => s - 1)} style={{ padding: '10px 20px', background: 'transparent', color: '#777', fontWeight: 600, fontSize: 13, border: '1px solid #333', borderRadius: 8, cursor: 'pointer' }}>
+        <button onClick={() => setStage(s => s - 1)} style={{ padding: '10px 20px', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 13, border: '1px solid var(--border-default)', borderRadius: 8, cursor: 'pointer' }}>
           ← Back
         </button>
       )}
-      <button onClick={onCancel} style={{ padding: '10px 20px', background: 'transparent', color: '#555', fontWeight: 600, fontSize: 13, border: '1px solid #2a2a2a', borderRadius: 8, cursor: 'pointer' }}>
+      <button onClick={onCancel} style={{ padding: '10px 20px', background: 'transparent', color: 'var(--text-ghost)', fontWeight: 600, fontSize: 13, border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer' }}>
         Skip Wizard
       </button>
       {stage < TOTAL_STAGES ? (
-        <button onClick={() => setStage(s => s + 1)} style={{ padding: '10px 24px', background: '#f5a623', color: '#000', fontWeight: 700, fontSize: 13, border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+        <button onClick={() => setStage(s => s + 1)} style={{ padding: '10px 24px', background: 'var(--accent-blue)', color: '#fff', fontWeight: 700, fontSize: 13, border: 'none', borderRadius: 8, cursor: 'pointer' }}>
           Next →
         </button>
       ) : (
-        <button onClick={handleFinish} style={{ padding: '10px 24px', background: '#f5a623', color: '#000', fontWeight: 700, fontSize: 13, border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+        <button onClick={handleFinish} style={{ padding: '10px 24px', background: 'var(--accent-blue)', color: '#fff', fontWeight: 700, fontSize: 13, border: 'none', borderRadius: 8, cursor: 'pointer' }}>
           Review & Apply →
         </button>
       )}
@@ -321,8 +321,8 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   const stage1 = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Stage 1 — Project Basics</div>
-      <div style={{ fontSize: 12, color: '#555', marginBottom: 20 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Stage 1 — Project Basics</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20 }}>
         Fields already detected from your file are pre-filled. Confirm or correct them.
       </div>
       <Grid>
@@ -360,7 +360,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   const stage2 = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 20 }}>Stage 2 — Shoot Parameters</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>Stage 2 — Shoot Parameters</div>
       <Grid>
         <Input
           label={`Total Shoot Days${alreadyHas.shootDays ? ' ✓' : ''}`}
@@ -379,7 +379,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
         onChange={v => upEdit('startDate', v)}
         hint="Select the month production begins (pre-production start). Year can extend into any future year."
       />
-      <div style={{ padding: '12px 14px', background: '#1a1a1a', borderRadius: 8, fontSize: 12, color: '#666' }}>
+      <div style={{ padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)' }}>
         Distant locations and studio days can be set in the Production Budget screen after importing.
       </div>
     </>
@@ -389,14 +389,14 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   const stage3 = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 20 }}>Stage 3 — Production Timeline</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>Stage 3 — Production Timeline</div>
       <Grid>
         <Input label={`Development (months)${alreadyHas.devMonths ? ' ✓' : ''}`}   value={edit.developmentMonths} onChange={v => upEdit('developmentMonths', v)} type="number" placeholder="e.g. 1" />
         <Input label={`Pre-Production (months)${alreadyHas.preProd ? ' ✓' : ''}`}  value={edit.preProdMonths}    onChange={v => upEdit('preProdMonths', v)}    type="number" placeholder="e.g. 2" />
         <Input label={`Principal Photography (months)${alreadyHas.shoot ? ' ✓' : ''}`} value={edit.shootMonths}  onChange={v => upEdit('shootMonths', v)}      type="number" placeholder="e.g. 1" />
         <Input label={`Post-Production (months)${alreadyHas.post ? ' ✓' : ''}`}    value={edit.postMonths}       onChange={v => upEdit('postMonths', v)}       type="number" placeholder="e.g. 3" />
       </Grid>
-      <div style={{ marginTop: 8, padding: '10px 14px', background: '#1a1a1a', borderRadius: 8, fontSize: 12, color: '#666' }}>
+      <div style={{ marginTop: 8, padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)' }}>
         Total: {(
           (parseFloat(edit.developmentMonths) || 0) +
           (parseFloat(edit.preProdMonths) || 0) +
@@ -415,8 +415,8 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   const stage4 = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Stage 4 — Department Allocations</div>
-      <div style={{ fontSize: 12, color: '#555', marginBottom: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Stage 4 — Department Allocations</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
         Enter percentage allocations for each department. The currency figure updates live — compare directly against your Excel sheet.
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
@@ -425,7 +425,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
           const amt = totalBudget > 0 && pct > 0 ? (pct / 100) * totalBudget : null
           return (
             <div key={dept.code} style={{ marginBottom: 2 }}>
-              <div style={{ fontSize: 10, color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-ghost)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
                 {dept.code} — {dept.name}
               </div>
               <input
@@ -434,14 +434,14 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
                 onChange={e => upDeptPct(dept.code, e.target.value)}
                 onFocus={e => e.target.select()}
                 placeholder="% allocation"
-                style={{ width: '100%', padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                style={{ width: '100%', padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
               />
               {amt !== null ? (
-                <div style={{ fontSize: 11, color: '#666', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
                   {fmtAmt(amt)}
                 </div>
               ) : (
-                <div style={{ fontSize: 11, color: '#3a3a3a', marginTop: 3 }}>—</div>
+                <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 3 }}>—</div>
               )}
             </div>
           )
@@ -449,31 +449,31 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
       </div>
 
       {/* Running total bar */}
-      <div style={{ marginTop: 16, padding: '12px 14px', background: '#1a1a1a', borderRadius: 8, fontSize: 12 }}>
+      <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ color: deptTotal > 102 ? '#cc2233' : deptTotal > 98 ? '#4ec24e' : '#f5a623', fontWeight: 600 }}>
+          <span style={{ color: deptTotal > 102 ? 'var(--accent-red)' : deptTotal > 98 ? 'var(--accent-green)' : 'var(--accent-amber)', fontWeight: 600 }}>
             Total: {deptTotal.toFixed(1)}%
           </span>
           {totalBudget > 0 && (
-            <span style={{ color: '#555' }}>
+            <span style={{ color: 'var(--text-muted)' }}>
               = {fmtAmt(deptTotalAmount)}
             </span>
           )}
           {totalBudget > 0 && (
-            <span style={{ color: '#444', marginLeft: 'auto' }}>
+            <span style={{ color: 'var(--text-ghost)', marginLeft: 'auto' }}>
               Budget: {fmtAmt(totalBudget)}
             </span>
           )}
         </div>
         {Math.abs(deptTotal - 100) > 2 && (
-          <div style={{ color: '#f5a623', marginTop: 6, fontSize: 11 }}>
+          <div style={{ color: 'var(--accent-amber)', marginTop: 6, fontSize: 11 }}>
             ⚠ Should total 100% — {deptTotal < 100
               ? `${(100 - deptTotal).toFixed(1)}% unallocated`
               : `${(deptTotal - 100).toFixed(1)}% over`}
           </div>
         )}
         {totalBudget > 0 && deptTotalAmount > 0 && Math.abs(deptTotalAmount - totalBudget) > totalBudget * 0.01 && (
-          <div style={{ color: '#f5a623', marginTop: 4, fontSize: 11 }}>
+          <div style={{ color: 'var(--accent-amber)', marginTop: 4, fontSize: 11 }}>
             ⚠ Dept total {fmtAmt(deptTotalAmount)} ≠ budget {fmtAmt(totalBudget)}
           </div>
         )}
@@ -518,8 +518,8 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   const stage5 = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Stage 5 — Key Crew Rates</div>
-      <div style={{ fontSize: 12, color: '#555', marginBottom: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Stage 5 — Key Crew Rates</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
         Enter rates for HOD and key crew. Leave blank for roles you'll fill in later on the Salary Forecast page.
         Rates detected from your upload are pre-filled.
       </div>
@@ -527,7 +527,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
       {/* Column headers */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 110px 32px', gap: '0 8px', marginBottom: 6 }}>
         {['Role', 'Rate', 'Unit', ''].map(h => (
-          <div key={h} style={{ fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+          <div key={h} style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
         ))}
       </div>
 
@@ -539,19 +539,19 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
               value={role.role}
               onChange={e => updateKeyRole(idx, 'role', e.target.value)}
               placeholder="Role name"
-              style={{ padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+              style={{ padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
             />
             <input
               type="number"
               value={role.rate || ''}
               onChange={e => updateKeyRole(idx, 'rate', parseFloat(e.target.value) || 0)}
               placeholder="e.g. 400000"
-              style={{ padding: '8px 10px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }}
+              style={{ padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }}
             />
             <select
               value={role.unit}
               onChange={e => updateKeyRole(idx, 'unit', e.target.value)}
-              style={{ padding: '8px 8px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+              style={{ padding: '8px 8px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
             >
               <option value="weekly">Weekly</option>
               <option value="daily">Daily</option>
@@ -559,7 +559,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
             </select>
             <button
               onClick={() => removeKeyRole(idx)}
-              style={{ width: 28, height: 34, background: 'transparent', border: '1px solid #333', borderRadius: 6, color: '#cc2233', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: 28, height: 34, background: 'transparent', border: '1px solid var(--border-default)', borderRadius: 6, color: 'var(--accent-red)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >×</button>
           </div>
         ))}
@@ -567,13 +567,13 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
       <button
         onClick={addKeyRole}
-        style={{ marginTop: 6, padding: '8px 16px', background: 'transparent', border: '1px dashed #444', borderRadius: 6, color: '#777', cursor: 'pointer', fontSize: 12, width: '100%' }}
+        style={{ marginTop: 6, padding: '8px 16px', background: 'transparent', border: '1px dashed var(--border-default)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, width: '100%' }}
       >
         + Add role
       </button>
 
       {/* Total salary budget */}
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #222' }}>
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
         <Input
           label="Total Salary Budget (all crew & cast)"
           value={String(extras.totalSalaryBudget || '')}
@@ -582,7 +582,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
           placeholder="e.g. 45000000"
         />
         {salaryVariance !== null && salaryVariance > 0.1 && (
-          <div style={{ fontSize: 11, color: '#f5a623', marginTop: -6, marginBottom: 10, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 11, color: 'var(--accent-amber)', marginTop: -6, marginBottom: 10, lineHeight: 1.6 }}>
             ⚠ Entered rates total approximately {edit.currency || '₦'}{estimatedRatesTotal.toLocaleString('en', { maximumFractionDigits: 0 })}
             {' '}over {shootMonths} shoot month(s). Total salary budget is {edit.currency || '₦'}{salaryBudget.toLocaleString('en', { maximumFractionDigits: 0 })}.
             You may have unaccounted roles.
@@ -598,8 +598,8 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
 
   const stage6 = (
     <>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Stage 6 — Funding Installments</div>
-      <div style={{ fontSize: 12, color: '#555', marginBottom: 16 }}>Enter the funding installment structure — when each tranche arrives and as what percentage of the total budget.</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Stage 6 — Funding Installments</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Enter the funding installment structure — when each tranche arrives and as what percentage of the total budget.</div>
 
       {extras.installments.map((inst, i) => (
         <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
@@ -610,7 +610,7 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
               onChange={e => updateInstallment(i, 'pct', parseFloat(e.target.value) || 0)}
               onFocus={e => e.target.select()}
               placeholder="e.g. 40"
-              style={{ width: '100%', padding: '9px 12px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 7, color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+              style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
             />
           </div>
           <div style={{ flex: 1 }}>
@@ -621,30 +621,30 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
               onBlur={e => { if (!e.target.value) updateInstallment(i, 'month', 1) }}
               onFocus={e => e.target.select()}
               placeholder="e.g. 1"
-              style={{ width: '100%', padding: '9px 12px', background: '#1e1e1e', border: '1px solid #333', borderRadius: 7, color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+              style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
             />
           </div>
           <button
             onClick={() => removeInstallment(i)}
-            style={{ marginTop: 18, padding: '9px 12px', background: 'transparent', border: '1px solid #333', borderRadius: 7, color: '#cc2233', cursor: 'pointer', fontSize: 13 }}
+            style={{ marginTop: 18, padding: '9px 12px', background: 'transparent', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--accent-red)', cursor: 'pointer', fontSize: 13 }}
           >×</button>
         </div>
       ))}
 
       <button
         onClick={addInstallment}
-        style={{ marginTop: 4, padding: '9px 20px', background: 'transparent', border: '1px dashed #444', borderRadius: 7, color: '#777', cursor: 'pointer', fontSize: 12, width: '100%' }}
+        style={{ marginTop: 4, padding: '9px 20px', background: 'transparent', border: '1px dashed var(--border-default)', borderRadius: 7, color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, width: '100%' }}
       >
         + Add Installment
       </button>
 
       {extras.installments.length > 0 && (
-        <div style={{ marginTop: 12, padding: '10px 14px', background: '#1a1a1a', borderRadius: 8, fontSize: 12 }}>
-          <span style={{ color: Math.abs(instTotal - 100) < 1 ? '#4ec24e' : '#f5a623', fontWeight: 600 }}>
+        <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12 }}>
+          <span style={{ color: Math.abs(instTotal - 100) < 1 ? 'var(--accent-green)' : 'var(--accent-amber)', fontWeight: 600 }}>
             Total: {instTotal.toFixed(1)}%
           </span>
           {Math.abs(instTotal - 100) >= 1 && (
-            <span style={{ color: '#f5a623', marginLeft: 10 }}>⚠ Should equal 100%</span>
+            <span style={{ color: 'var(--accent-amber)', marginLeft: 10 }}>⚠ Should equal 100%</span>
           )}
         </div>
       )}
@@ -657,8 +657,8 @@ export default function BudgetWizard({ initialEdit, parsedWorkbook, onComplete, 
     <div style={shell}>
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#f5a623', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Budget Questionnaire Wizard</div>
-          <div style={{ fontSize: 11, color: '#444' }}>Stage {stage} of {TOTAL_STAGES}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Budget Questionnaire Wizard</div>
+          <div style={{ fontSize: 11, color: 'var(--text-ghost)' }}>Stage {stage} of {TOTAL_STAGES}</div>
         </div>
         {progress}
         {stageContent}

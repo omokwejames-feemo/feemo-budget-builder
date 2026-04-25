@@ -263,7 +263,7 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
             </button>
             <button
               className="btn btn-sm"
-              style={{ background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 700 }}
+              style={{ background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700 }}
               onClick={() => {
                 const suggested = suggestInstallmentTiming(installments, totalPaymentsPerMonth, project.totalBudget, timeline)
                 setInstallments(suggested)

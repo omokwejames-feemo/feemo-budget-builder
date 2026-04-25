@@ -406,32 +406,32 @@ export default function App() {
     const warning = daysLeft <= 2
 
     return (
-      <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: '#141414', border: `1px solid ${urgent ? '#cc2233' : warning ? '#f5a623' : '#2a2a2a'}`, borderRadius: 16, padding: '44px 48px', maxWidth: 440, width: '90%', textAlign: 'center', boxShadow: '0 24px 80px rgba(0,0,0,0.8)' }}>
-          <div style={{ fontSize: 40, marginBottom: 20 }}>{urgent ? '⚠️' : '🔑'}</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 6 }}>Beta Access</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#f5a623', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 24 }}>Feemo Budget Manager</div>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: 'var(--bg-surface)', border: `1px solid ${urgent ? 'var(--accent-red)' : warning ? 'var(--accent-amber)' : 'var(--border-default)'}`, borderRadius: 16, padding: '44px 48px', maxWidth: 440, width: '90%', textAlign: 'center', boxShadow: '0 24px 80px rgba(0,0,0,0.7)' }}>
+          <div style={{ fontSize: 36, marginBottom: 18 }}>{urgent ? '⚠' : '🔑'}</div>
+          <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Beta Access</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 24 }}>Feemo Budget Manager</div>
 
           {daysLeft === 0 ? (
-            <p style={{ fontSize: 15, color: '#cc2233', fontWeight: 700, lineHeight: 1.6, marginBottom: 8 }}>
+            <p style={{ fontSize: 15, color: 'var(--accent-red)', fontWeight: 700, lineHeight: 1.6, marginBottom: 8 }}>
               Your beta access expires <strong>today</strong>.
             </p>
           ) : (
-            <p style={{ fontSize: 15, color: urgent ? '#cc2233' : warning ? '#f5a623' : '#ccc', fontWeight: 600, lineHeight: 1.6, marginBottom: 8 }}>
-              You have <strong style={{ fontSize: 28, display: 'block', margin: '8px 0', color: urgent ? '#cc2233' : warning ? '#f5a623' : '#fff' }}>
+            <p style={{ fontSize: 15, color: urgent ? 'var(--accent-red)' : warning ? 'var(--accent-amber)' : 'var(--text-secondary)', fontWeight: 600, lineHeight: 1.6, marginBottom: 8 }}>
+              You have <strong style={{ fontSize: 28, display: 'block', margin: '8px 0', color: urgent ? 'var(--accent-red)' : warning ? 'var(--accent-amber)' : 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
                 {daysLeft} {daysLeft === 1 ? 'day' : 'days'}
               </strong> remaining on your beta access key.
             </p>
           )}
 
-          <p style={{ fontSize: 12, color: '#555', marginBottom: 28 }}>
-            Access expires on <strong style={{ color: '#777' }}>{expiryDate}</strong>.
-            {(urgent || warning) && <><br />Contact <a href="mailto:james@feemovision.com" style={{ color: '#f5a623', textDecoration: 'none' }}>james@feemovision.com</a> to extend your access.</>}
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 28 }}>
+            Access expires on <strong style={{ color: 'var(--text-secondary)' }}>{expiryDate}</strong>.
+            {(urgent || warning) && <><br />Contact <a href="mailto:james@feemovision.com" style={{ color: 'var(--accent-blue)', textDecoration: 'none' }}>james@feemovision.com</a> to extend your access.</>}
           </p>
 
           <button
             onClick={() => setShowExpiryNotice(false)}
-            style={{ width: '100%', padding: '13px 0', background: '#f5a623', color: '#000', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}
+            style={{ width: '100%', padding: '13px 0', background: 'var(--accent-blue)', color: '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: 'none', borderRadius: 8, cursor: 'pointer' }}
           >
             OK, got it
           </button>
@@ -442,32 +442,32 @@ export default function App() {
 
   // Fresh-start dialog rendered as a floating overlay regardless of current view
   const freshStartDialog = showFreshStartConfirm ? (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 14, padding: '36px 40px', maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', textAlign: 'center' }}>
-        <div style={{ fontSize: 32, marginBottom: 14 }}>🗂</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 8 }}>New Project (Fresh Start)</div>
-        <p style={{ fontSize: 13, color: '#888', lineHeight: 1.7, marginBottom: 28 }}>
-          Starting a new project will close the current project.
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '36px 40px', maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', textAlign: 'center' }}>
+        <div style={{ fontSize: 30, marginBottom: 14 }}>◻</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>New Project</div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 28 }}>
+          Starting a new project will close the current one.
           {hasUnsavedChanges ? ' You have unsaved changes — save before continuing?' : ' Any unsaved changes will be lost.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {hasUnsavedChanges && (
             <button
               onClick={async () => { await handleSave(); doFreshStart() }}
-              style={{ width: '100%', padding: '12px 0', background: '#f5a623', color: '#000', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}
+              style={{ width: '100%', padding: '12px 0', background: 'var(--accent-blue)', color: '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: 'none', borderRadius: 8, cursor: 'pointer' }}
             >
               Save &amp; Start New Project
             </button>
           )}
           <button
             onClick={doFreshStart}
-            style={{ width: '100%', padding: '12px 0', background: hasUnsavedChanges ? 'transparent' : '#f5a623', color: hasUnsavedChanges ? '#cc4444' : '#000', fontWeight: 700, fontSize: 14, border: hasUnsavedChanges ? '1px solid #cc4444' : 'none', borderRadius: 8, cursor: 'pointer' }}
+            style={{ width: '100%', padding: '12px 0', background: hasUnsavedChanges ? 'rgba(240,90,90,0.08)' : 'var(--accent-blue)', color: hasUnsavedChanges ? 'var(--accent-red)' : '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: hasUnsavedChanges ? '1px solid rgba(240,90,90,0.25)' : 'none', borderRadius: 8, cursor: 'pointer' }}
           >
             {hasUnsavedChanges ? "Don't Save — Start Anyway" : 'Start New Project'}
           </button>
           <button
             onClick={() => setShowFreshStartConfirm(false)}
-            style={{ width: '100%', padding: '12px 0', background: 'transparent', color: '#666', fontWeight: 600, fontSize: 14, border: '1px solid #333', borderRadius: 8, cursor: 'pointer' }}
+            style={{ width: '100%', padding: '12px 0', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: '1px solid var(--border-default)', borderRadius: 8, cursor: 'pointer' }}
           >
             Cancel
           </button>
@@ -528,15 +528,50 @@ export default function App() {
 
   const fileName = currentFilePath ? currentFilePath.split('/').pop() : null
 
+  // Topbar: budget health derived from total allocated %
+  const totalAllocPct = Object.values(store.deptAllocations).reduce((s, v) => s + v, 0)
+  const healthPct = Math.min(100, Math.round(totalAllocPct))
+  const healthClass = healthPct >= 90 ? 'pill-green' : healthPct >= 55 ? 'pill-amber' : store.project.totalBudget > 0 ? 'pill-red' : ''
+
+  const NAV_SECTIONS = [
+    {
+      label: 'Planning',
+      items: [
+        { id: 'assumptions' as Screen, label: 'Assumptions',         icon: '⊞' },
+        { id: 'budget'      as Screen, label: 'Budget',              icon: '◫' },
+        { id: 'salary'      as Screen, label: 'Salary',              icon: '◐' },
+        { id: 'forecast'    as Screen, label: 'Forecast',            icon: '◇' },
+      ],
+    },
+    {
+      label: 'Finance',
+      items: [
+        { id: 'payments'    as Screen, label: 'Payments',            icon: '◈' },
+        { id: 'expenditure' as Screen, label: 'Expenditure',         icon: '▣' },
+      ],
+    },
+    {
+      label: 'Manage',
+      items: [
+        { id: 'export'      as Screen, label: 'Export',              icon: '↗' },
+        { id: 'file'        as Screen, label: 'File',                icon: '◻' },
+        { id: 'about'       as Screen, label: 'About',               icon: 'ℹ' },
+      ],
+    },
+  ]
+
+  const unreadNotices = store.notices.filter(n => !n.dismissed).length
+
   return (
     <div className="app">
+      {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-brand">
           <div style={{ width: 32, height: 32, flexShrink: 0 }}>
             <img
               src="./feemo-logo.png"
               alt="F"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 8 }}
               onError={e => {
                 const el = e.currentTarget
                 el.style.display = 'none'
@@ -552,98 +587,60 @@ export default function App() {
           </div>
         </div>
 
-        {/* File status chip */}
-        {(fileName || hasUnsavedChanges) && (
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>
-              {fileName ?? 'Unsaved project'}
-            </div>
-            {hasUnsavedChanges && (
-              <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>● Unsaved changes</div>
-            )}
-          </div>
-        )}
-
         <nav className="sidebar-nav">
-          {NAV.map(item => (
-            <button
-              key={item.id}
-              className={`nav-item ${screen === item.id ? 'active' : ''}`}
-              onClick={() => setScreen(item.id)}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              <span>{item.label}</span>
-              {item.id === 'file' && hasUnsavedChanges && (
-                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
-              )}
-              {item.id === 'assumptions' && hasAssumptionErrors && (
-                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--red)', flexShrink: 0 }} />
-              )}
-              {item.id === 'forecast' && hasForecastWarnings && (
-                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
-              )}
-              {item.id === 'about' && updateAvailable && (
-                <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', flexShrink: 0 }} />
-              )}
-            </button>
+          {NAV_SECTIONS.map(section => (
+            <div key={section.label}>
+              <div className="nav-section-label">{section.label}</div>
+              {section.items.map(item => (
+                <button
+                  key={item.id}
+                  className={`nav-item ${screen === item.id ? 'active' : ''}`}
+                  onClick={() => setScreen(item.id)}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  <span>{item.label}</span>
+                  {item.id === 'file' && hasUnsavedChanges && (
+                    <span className="nav-dot amber" />
+                  )}
+                  {item.id === 'assumptions' && hasAssumptionErrors && (
+                    <span className="nav-badge red">!</span>
+                  )}
+                  {item.id === 'forecast' && hasForecastWarnings && (
+                    <span className="nav-dot amber" />
+                  )}
+                  {item.id === 'about' && updateAvailable && (
+                    <span className="nav-badge green">↑</span>
+                  )}
+                </button>
+              ))}
+            </div>
           ))}
+
+          {/* Notices button */}
+          <div className="nav-section-label" style={{ marginTop: 6 }}>System</div>
+          <button
+            className={`nav-item ${showNotices ? 'active' : ''}`}
+            onClick={() => setShowNotices(true)}
+          >
+            <span className="nav-icon">🔔</span>
+            <span>Notices</span>
+            {unreadNotices > 0 && (
+              <span className="nav-badge">{unreadNotices}</span>
+            )}
+          </button>
         </nav>
 
-        {/* Notices bell */}
-        {(() => {
-          const unread = store.notices.filter(n => !n.dismissed).length
-          return (
-            <button
-              onClick={() => setShowNotices(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                margin: '4px 8px', padding: '8px 10px',
-                background: showNotices ? 'var(--bg3)' : 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: 7, cursor: 'pointer', color: 'var(--text3)',
-                fontSize: 12, fontWeight: 500, position: 'relative',
-              }}
-              title="Notices"
-            >
-              <span style={{ fontSize: 14 }}>🔔</span>
-              <span>Notices</span>
-              {unread > 0 && (
-                <span style={{
-                  marginLeft: 'auto',
-                  minWidth: 18, height: 18, borderRadius: 9,
-                  background: 'var(--accent)', color: '#000',
-                  fontSize: 10, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 4px',
-                }}>
-                  {unread}
-                </span>
-              )}
-            </button>
-          )
-        })()}
-
-        {/* Undo/redo status */}
+        {/* Undo/redo */}
         {(undoCount > 0 || redoCount > 0) && (
-          <div style={{
-            padding: '6px 12px', fontSize: 10, color: 'var(--text3)',
-            borderTop: '1px solid var(--border)',
-            display: 'flex', gap: 10,
-          }}>
+          <div style={{ padding: '6px 14px', fontSize: 10, color: 'var(--text-ghost)', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 12 }}>
             <span
-              style={{ cursor: undoCount > 0 ? 'pointer' : 'default', color: undoCount > 0 ? 'var(--text2)' : 'var(--text3)' }}
-              onClick={handleUndo}
-              title="Undo (Ctrl+Z)"
-            >
-              ↩ {undoCount}
-            </span>
+              style={{ cursor: undoCount > 0 ? 'pointer' : 'default', color: undoCount > 0 ? 'var(--text-muted)' : 'var(--text-ghost)' }}
+              onClick={handleUndo} title="Undo (Ctrl+Z)"
+            >↩ {undoCount}</span>
             <span
-              style={{ cursor: redoCount > 0 ? 'pointer' : 'default', color: redoCount > 0 ? 'var(--text2)' : 'var(--text3)' }}
-              onClick={handleRedo}
-              title="Redo (Ctrl+Shift+Z)"
-            >
-              ↪ {redoCount}
-            </span>
+              style={{ cursor: redoCount > 0 ? 'pointer' : 'default', color: redoCount > 0 ? 'var(--text-muted)' : 'var(--text-ghost)' }}
+              onClick={handleRedo} title="Redo (Ctrl+Shift+Z)"
+            >↪ {redoCount}</span>
           </div>
         )}
 
@@ -652,27 +649,79 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="content">
-        {screen === 'assumptions' && <AssumptionsDashboard issues={assumptionIssues} />}
-        {screen === 'budget'      && <ProductionBudget />}
-        {screen === 'salary'      && <SalaryForecast />}
-        {screen === 'forecast'    && <ProductionForecast issues={forecastIssues} />}
-        {screen === 'payments'    && <PaymentScheduleCreator />}
-        {screen === 'expenditure' && <ExpenditureTracker />}
-        {screen === 'export'      && <ExportScreen />}
-        {screen === 'about'       && <AboutScreen />}
-        {screen === 'file' && (
-          <FileScreen
-            currentFilePath={currentFilePath}
-            hasUnsavedChanges={hasUnsavedChanges}
-            onSave={handleSave}
-            onSaveAs={handleSaveAs}
-            onOpen={handleOpenProject}
-            onClose={handleClose}
-            getSerializableState={getSerializableState}
-          />
-        )}
-      </main>
+      {/* ── Right panel: topbar + content ── */}
+      <div className="content-wrapper">
+        <header className="topbar">
+          <div className="topbar-left">
+            <div className="topbar-pill topbar-project">
+              <span className="pill-label">◻</span>
+              <span className="pill-label">Project</span>
+              <span className="pill-value">{store.project.title || 'Untitled'}</span>
+            </div>
+            {fileName && (
+              <div className="topbar-pill" style={{ fontSize: 10 }}>
+                <span className="pill-label">📄</span>
+                <span style={{ color: 'var(--text-ghost)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{fileName}</span>
+                {hasUnsavedChanges && <span style={{ color: 'var(--accent-amber)', fontSize: 9, fontWeight: 700 }}>●</span>}
+              </div>
+            )}
+          </div>
+          <div className="topbar-right">
+            {store.project.totalBudget > 0 && (
+              <div className={`topbar-pill ${healthClass}`}>
+                <span className="pill-label">Health</span>
+                <span className="pill-value">{healthPct}%</span>
+              </div>
+            )}
+            {store.project.shootDays > 0 && (
+              <div className="topbar-pill">
+                <span className="pill-label">Shoot</span>
+                <span className="pill-value">{store.project.shootDays}d</span>
+              </div>
+            )}
+            {hasForecastWarnings ? (
+              <div className="topbar-pill pill-red">
+                <span className="pill-label">▾</span>
+                <span className="pill-value">Deficit</span>
+              </div>
+            ) : store.project.totalBudget > 0 ? (
+              <div className="topbar-pill pill-green">
+                <span className="pill-label">▴</span>
+                <span className="pill-value">On Track</span>
+              </div>
+            ) : null}
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setAppView('upload')}
+              style={{ fontSize: 11 }}
+            >
+              ↑ Upload Budget
+            </button>
+          </div>
+        </header>
+
+        <main className="content">
+          {screen === 'assumptions' && <AssumptionsDashboard issues={assumptionIssues} />}
+          {screen === 'budget'      && <ProductionBudget />}
+          {screen === 'salary'      && <SalaryForecast />}
+          {screen === 'forecast'    && <ProductionForecast issues={forecastIssues} />}
+          {screen === 'payments'    && <PaymentScheduleCreator />}
+          {screen === 'expenditure' && <ExpenditureTracker />}
+          {screen === 'export'      && <ExportScreen />}
+          {screen === 'about'       && <AboutScreen />}
+          {screen === 'file' && (
+            <FileScreen
+              currentFilePath={currentFilePath}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onSave={handleSave}
+              onSaveAs={handleSaveAs}
+              onOpen={handleOpenProject}
+              onClose={handleClose}
+              getSerializableState={getSerializableState}
+            />
+          )}
+        </main>
+      </div>
 
       {/* Modals */}
       {showOpenDialog && (
@@ -687,11 +736,7 @@ export default function App() {
       {pendingUpdate && (
         <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
       )}
-
-      {/* Fresh Start dialog (shared overlay — also rendered in home/rebuild/upload views) */}
       {freshStartDialog}
-
-      {/* Notices drawer */}
       {showNotices && (
         <NoticesDrawer
           onClose={() => setShowNotices(false)}
@@ -699,18 +744,8 @@ export default function App() {
         />
       )}
 
-      {/* Quick-save toast */}
       {saveToast && (
-        <div style={{
-          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg2)', border: '1px solid var(--green)',
-          color: 'var(--green)', fontWeight: 600, fontSize: 13,
-          padding: '10px 22px', borderRadius: 8,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-          zIndex: 9999, pointerEvents: 'none',
-        }}>
-          ✓ Saved to app storage
-        </div>
+        <div className="save-toast">✓ Saved</div>
       )}
     </div>
   )

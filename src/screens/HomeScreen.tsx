@@ -46,10 +46,10 @@ export default function HomeScreen({ onNewProject, onOpenProject, onUploadBudget
         <div style={{
           display: 'none',
           width: 96, height: 96,
-          background: 'var(--accent)', color: '#000',
-          fontWeight: 800, fontSize: 48, borderRadius: 20,
+          background: 'var(--accent-blue)', color: '#fff',
+          fontWeight: 700, fontSize: 48, fontFamily: 'var(--font-mono)', borderRadius: 20,
           alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 32px rgba(245,166,35,0.3)',
+          boxShadow: '0 8px 32px rgba(29,108,245,0.3)',
         }}>F</div>
       </div>
 
@@ -66,8 +66,8 @@ export default function HomeScreen({ onNewProject, onOpenProject, onUploadBudget
             onClick={onNewProject}
             style={{
               padding: '14px 32px',
-              background: 'var(--accent)', color: '#000',
-              fontWeight: 700, fontSize: 15,
+              background: 'var(--accent-blue)', color: '#fff',
+              fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-ui)',
               border: 'none', borderRadius: 8, cursor: 'pointer',
               transition: 'opacity 0.15s',
             }}
