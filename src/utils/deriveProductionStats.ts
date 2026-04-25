@@ -63,7 +63,8 @@ export function deriveProductionStats(store: Pick<BudgetState,
     .filter(n => !n.dismissed && (n.type === 'conflict' || n.type === 'info'))
     .slice(0, 5)
 
-  const hasData = !!project.title || totalBudget > 0
+  // Show dashboard if any project data exists — title, budget, location, or dept data
+  const hasData = !!project.title || totalBudget > 0 || !!project.location || deptRows.length > 0
 
   return { totalBudget, totalSpent, remaining, usedPct, deptRows, recentDeductions, unsignedOldSchedules, prodNotices, hasData }
 }

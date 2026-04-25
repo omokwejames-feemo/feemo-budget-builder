@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, Timeline, getDeptTarget, getTotalMonths, getMonthLabel, getMonthPhase, DEPT_ACTIVE_PHASES } from '../store/budgetStore'
 import { Issue } from '../hooks/useIssueDetector'
 import { formatCurrency } from '../utils/formatCurrency'
+import { formatPercent } from '../utils/formatPercent'
 
 function fmtN(n: number, cur = 'NGN', brackets = false) {
   if (n === 0) return '—'
@@ -303,7 +304,7 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
                   <tr key={inst.id}>
                     <td style={{ padding: '6px 12px', ...stickyItem }}>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{inst.label}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text3)' }}>{inst.percentage}% — {inst.trigger}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text3)' }}>{formatPercent(inst.percentage)} — {inst.trigger}</div>
                     </td>
                     {monthly.map((v, i) => (
                       <td key={i} style={{ textAlign: 'right', paddingRight: 8, paddingTop: 6, paddingBottom: 6, color: v > 0 ? 'var(--green)' : 'var(--text3)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
@@ -406,7 +407,7 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
                   <td className="td-mono">{i + 1}</td>
                   <td style={{ fontWeight: 600 }}>{inst.label}</td>
                   <td style={{ color: 'var(--text2)', fontSize: 12 }}>{inst.trigger}</td>
-                  <td className="td-num">{inst.percentage}%</td>
+                  <td className="td-num">{formatPercent(inst.percentage)}</td>
                   <td className="td-num" style={{ color: 'var(--green)' }}>{fmtN((inst.percentage / 100) * project.totalBudget, cur)}</td>
                   <td style={{ fontSize: 12 }}>Month {inst.month} — {getMonthLabel(inst.month, timeline, project.startDate)}</td>
                 </tr>
@@ -476,7 +477,7 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
                 return (
                   <div key={inst.id} style={{ background: changed ? 'rgba(245,166,35,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${changed ? 'rgba(245,166,35,0.3)' : 'var(--border)'}`, borderRadius: 6, padding: '10px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, fontSize: 13 }}>{inst.label} ({inst.percentage}%)</span>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{inst.label} ({formatPercent(inst.percentage)})</span>
                       {changed && <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Month changed</span>}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>

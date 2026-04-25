@@ -632,6 +632,7 @@ function App() {
       label: 'Planning',
       items: [
         { id: 'assumptions' as Screen, label: 'Assumptions',         icon: '⊞' },
+        { id: 'production'  as Screen, label: 'Dashboard',           icon: '🎬' },
         { id: 'budget'      as Screen, label: 'Budget',              icon: '◫' },
         { id: 'salary'      as Screen, label: 'Salary',              icon: '◐' },
         { id: 'forecast'    as Screen, label: 'Forecast',            icon: '◇' },

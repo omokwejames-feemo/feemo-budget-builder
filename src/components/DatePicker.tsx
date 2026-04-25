@@ -80,12 +80,9 @@ export default function DatePicker({ label, value, onChange, hint }: Props) {
   }
   function onYearChange(y: string) {
     const n = parseInt(y)
-    if (y !== '' && (isNaN(n) || y.length > 4)) return
+    if (y !== '' && isNaN(n)) return
     emit(y, parsed.month, parsed.day)
   }
-
-  const currentYear = new Date().getFullYear()
-  const yearOptions = Array.from({ length: 8 }, (_, i) => currentYear - 1 + i)
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -114,17 +111,16 @@ export default function DatePicker({ label, value, onChange, hint }: Props) {
           style={{ ...inputStyle, flex: 1, minWidth: 0, textAlign: 'center' }}
         />
 
-        {/* Year dropdown */}
-        <select
+        {/* Year input */}
+        <input
+          type="number"
+          min={2000}
+          max={2099}
           value={parsed.year}
           onChange={e => onYearChange(e.target.value)}
-          style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-        >
-          <option value="">Year</option>
-          {yearOptions.map(y => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+          placeholder="Year"
+          style={{ ...inputStyle, flex: 1, minWidth: 0, textAlign: 'center' }}
+        />
       </div>
       {hint && (
         <div style={{ fontSize: 10, color: '#555', marginTop: 4 }}>{hint}</div>

@@ -654,7 +654,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
           <div style={{ marginTop: 8, display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
             <span style={{ color: 'var(--text2)' }}>Total:</span>
             <span style={{ fontWeight: 700, color: Math.abs(instTotal - 100) < 0.1 ? 'var(--green)' : 'var(--red)' }}>
-              {instTotal}%
+              {formatPercent(instTotal)}
             </span>
             {Math.abs(instTotal - 100) > 0.1 && (
               <span style={{ color: 'var(--red)', fontSize: 11 }}>⚠ Must equal 100%</span>
