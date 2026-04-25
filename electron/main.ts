@@ -977,6 +977,10 @@ process.on('unhandledRejection', async (reason) => {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
+// GPU process crashes on some macOS configurations cause renderer SIGTERM.
+// Disabling hardware acceleration prevents this at the cost of software rendering.
+app.disableHardwareAcceleration()
+
 app.whenReady().then(() => { createWindow(); buildAppMenu() })
 
 app.on('window-all-closed', () => {

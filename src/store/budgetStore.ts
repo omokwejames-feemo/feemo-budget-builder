@@ -381,7 +381,9 @@ export const useBudgetStore = create<BudgetState>()(
 )
 
 export function getTotalMonths(timeline: Timeline) {
-  return timeline.developmentMonths + timeline.preProdMonths + timeline.shootMonths + timeline.postMonths
+  const sum = (timeline.developmentMonths || 0) + (timeline.preProdMonths || 0) +
+    (timeline.shootMonths || 0) + (timeline.postMonths || 0)
+  return isFinite(sum) && sum >= 0 ? Math.floor(sum) : 0
 }
 
 export function getMonthLabel(monthIndex: number, timeline: Timeline, startDate: string): string {
