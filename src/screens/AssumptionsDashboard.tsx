@@ -91,7 +91,11 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
   const isSeries = isSeriesFormat(project.format)
   const isTele = isTelenovela(project.format)
   const isEp = isEpisodic(project.format)
-  const totalLI = DEPARTMENTS.reduce((s, d) => s + getDeptActual(d.code as DeptCode, { lineItems }), 0)
+  // Only sum line items for depts with a non-zero allocation; excluded depts (0%) don't count
+  const totalLI = DEPARTMENTS.reduce((s, d) => {
+    const code = d.code as DeptCode
+    return s + ((deptAllocations[code] || 0) > 0 ? getDeptActual(code, { lineItems }) : 0)
+  }, 0)
   const totalPct = totalLI > 0 && project.totalBudget > 0
     ? (totalLI / project.totalBudget) * 100
     : Object.values(deptAllocations).reduce((s, v) => s + v, 0)
@@ -687,7 +691,8 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
               const code = dept.code as DeptCode
               const pct = deptAllocations[code] || 0
               const liTotal = getDeptActual(code, { lineItems })
-              const hasLineItems = liTotal > 0
+              // Only treat as line-item-driven if the dept has BOTH line items AND a non-zero allocation
+              const hasLineItems = liTotal > 0 && pct > 0
               const displayAmt = hasLineItems ? liTotal : (pct / 100) * project.totalBudget
               const displayPct = hasLineItems && project.totalBudget > 0
                 ? (liTotal / project.totalBudget) * 100

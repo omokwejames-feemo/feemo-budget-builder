@@ -54,6 +54,8 @@ export default function SalaryForecast() {
       const items = store.lineItems[code] || []
       if (items.length === 0) return
 
+      if (getDeptTarget(code, store) <= 0) return  // skip depts the user has excluded (0% alloc)
+
       const activePhaseLabels = DEPT_ACTIVE_PHASES[code] ?? ['DEV', 'PRE-PROD', 'SHOOT', 'POST']
       const activeMonths = months.filter(m =>
         activePhaseLabels.includes(getMonthPhase(m, timeline))
