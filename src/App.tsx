@@ -670,20 +670,7 @@ function App() {
       {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div style={{ width: 32, height: 32, flexShrink: 0 }}>
-            <img
-              src="./feemo-logo.png"
-              alt="F"
-              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 8 }}
-              onError={e => {
-                const el = e.currentTarget
-                el.style.display = 'none'
-                const fb = el.nextElementSibling as HTMLElement | null
-                if (fb) fb.style.display = 'flex'
-              }}
-            />
-            <span className="brand-logo" style={{ display: 'none' }}>F</span>
-          </div>
+          <span className="brand-logo">F</span>
           <div>
             <div className="brand-name">Feemo</div>
             <div className="brand-sub">Budget Manager</div>

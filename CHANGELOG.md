@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.3.1 — Production Dashboard Overhaul: KPI Badges, Cashflow Chart, Spend by Category (2026-04-26)
+
+- **KPI card stripe + badge**: Each card on the Production Dashboard now has a 3px coloured top stripe and a status badge (purple for Budget, dynamic green/amber/red for Spent/Remaining based on thresholds)
+- **Spend by Category panel**: New panel showing top 7 departments by budget allocation with coloured horizontal bars and actual-spend overlay — sits alongside the existing Spend vs Budget bar chart
+- **Cashflow Projection chart**: Inline SVG showing cumulative spend (purple line) vs cumulative income from installments (green dashed line), with vertical markers at each installment receipt month and labelled X-axis
+- **Dashboard layout restructure**: Two 2-column rows — [Dept bars | Budget Allocation] and [Cashflow | Recent Transactions] — with Shoot Progress + Alerts side-by-side below, then DeptStatusTable full-width at the bottom
+- **Sidebar logo fix**: Gradient "FB" pill now always visible (no longer relies on image-load failure fallback)
+
 ## v2.3.0 — UI Redesign: Plus Jakarta Sans, Purple Accent, Light/Dark Mode (2026-04-26)
 
 - **Font**: Switched from DM Sans to Plus Jakarta Sans across the entire app — cleaner, more modern geometric letterforms matching the new design language
