@@ -738,6 +738,13 @@ function App() {
               <span className="nav-badge">{unreadNotices}</span>
             )}
           </button>
+          <button
+            className="nav-item"
+            onClick={() => window.open('./manual.html', '_blank')}
+          >
+            <span className="nav-icon">📖</span>
+            <span>Download Manual</span>
+          </button>
         </nav>
 
         {/* Undo/redo */}

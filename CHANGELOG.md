@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.0 — Scrollable Dashboard Panels, Export Redesign, Download Manual (2026-04-26)
+
+- **Scrollable dashboard panels**: Budget by Department, Spend by Category, and Recent Payments panels on the Production Dashboard are now fully scrollable — no longer capped at 6 rows. Each panel header shows a count badge (e.g. "12 depts ↕ scroll") so users always know how many rows are available.
+- **Export screen redesign**: When a project has spend data, the Export screen now shows four live KPI cards (Total Budget, Total Spent, Remaining, Budget Used %), a full Department Spend Breakdown table with progress bars and status chips, and a Payment History table (all approved schedules, newest-first).
+- **Download PDF Summary**: New button on the Export screen opens a print-ready single-page spend report in a new window. The page auto-triggers the OS print dialog — use "Save as PDF" to export. Disabled until at least one payment is approved.
+- **Download Manual sidebar tab**: New "📖 Download Manual" nav item in the sidebar (below Notices). Opens the v2.4 user manual in a browser window for online reading or print-to-PDF.
+- **User manual v2.4**: Manual now always opens with a "What's New in this Version" chapter listing all new features with inline visual mockups. Cover updated to Version 2.4.
+
 ## v2.3.3 — Dashboard Polish: Feemo Logo, Traffic Light Fix, Mockup Parity (2026-04-26)
 
 - **Feemo logo restored**: Sidebar now shows the Feemo image logo with gradient "F" pill as fallback — replaces the always-on "FB" pill from v2.3.1

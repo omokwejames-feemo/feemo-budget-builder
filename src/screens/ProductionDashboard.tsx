@@ -196,6 +196,8 @@ export default function ProductionDashboard() {
 
   const { totalBudget, totalSpent, remaining, usedPct, deptRows, recentDeductions, unsignedOldSchedules, prodNotices } = stats
 
+  const allDeductions = [...expenditureDeductions].sort((a, b) => new Date(b.approvedAt).getTime() - new Date(a.approvedAt).getTime())
+
   const alertDepts = deptRows.filter(d => d.status === 'AT RISK' || d.status === 'OVER BUDGET')
 
   // KPI stripe + badge logic
@@ -259,47 +261,57 @@ export default function ProductionDashboard() {
       {/* C. Two-col: Budget by Department (list) | Spend by Category */}
       <div className="prod-middle-row">
 
-        {/* Budget by Department — list style matching mockup */}
-        <div className="prod-panel" style={{ flex: '3 1 0', padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+        {/* Budget by Department — scrollable list */}
+        <div className="prod-panel" style={{ flex: '3 1 0', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Budget by Department</div>
               <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>Spend vs allocation per dept</div>
             </div>
+            {deptRows.length > 0 && (
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{deptRows.length} depts ↕ scroll</span>
+            )}
           </div>
           {deptRows.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '20px' }}>No department allocations set.</div>
           ) : (
-            deptRows.slice(0, 6).map(d => {
-              const pct = d.budgeted > 0 ? Math.min(100, (d.spent / d.budgeted) * 100) : 0
-              const barColor = d.status === 'OVER BUDGET' ? 'var(--accent-red)' : d.status === 'AT RISK' ? 'var(--accent-amber)' : 'var(--accent-green)'
-              const chipBg = d.status === 'OVER BUDGET' ? 'rgba(240,90,90,0.1)' : d.status === 'AT RISK' ? 'rgba(245,158,11,0.1)' : 'rgba(34,201,138,0.1)'
-              const chipColor = d.status === 'OVER BUDGET' ? 'var(--accent-red)' : d.status === 'AT RISK' ? 'var(--accent-amber)' : 'var(--accent-green)'
-              const chipText = d.status === 'OVER BUDGET' ? 'Over budget' : d.status === 'AT RISK' ? 'Almost reached' : 'On track'
-              return (
-                <div key={d.code} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{d.code} · {d.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{fmt(d.spent)} / {fmt(d.budgeted)}</div>
+            <div style={{ overflowY: 'auto', flex: 1, maxHeight: 280 }}>
+              {deptRows.map(d => {
+                const pct = d.budgeted > 0 ? Math.min(100, (d.spent / d.budgeted) * 100) : 0
+                const barColor = d.status === 'OVER BUDGET' ? 'var(--accent-red)' : d.status === 'AT RISK' ? 'var(--accent-amber)' : 'var(--accent-green)'
+                const chipBg = d.status === 'OVER BUDGET' ? 'rgba(240,90,90,0.1)' : d.status === 'AT RISK' ? 'rgba(245,158,11,0.1)' : 'rgba(34,201,138,0.1)'
+                const chipColor = d.status === 'OVER BUDGET' ? 'var(--accent-red)' : d.status === 'AT RISK' ? 'var(--accent-amber)' : 'var(--accent-green)'
+                const chipText = d.status === 'OVER BUDGET' ? 'Over budget' : d.status === 'AT RISK' ? 'Almost reached' : 'On track'
+                return (
+                  <div key={d.code} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{d.code} · {d.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{fmt(d.spent)} / {fmt(d.budgeted)}</div>
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100, background: chipBg, color: chipColor, letterSpacing: '0.04em' }}>{chipText}</span>
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100, background: chipBg, color: chipColor, letterSpacing: '0.04em' }}>{chipText}</span>
+                    <div style={{ height: 6, background: 'var(--border-subtle)', borderRadius: 100, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 100 }} />
+                    </div>
                   </div>
-                  <div style={{ height: 6, background: 'var(--border-subtle)', borderRadius: 100, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 100 }} />
-                  </div>
-                </div>
-              )
-            })
+                )
+              })}
+            </div>
           )}
         </div>
 
-        <div className="prod-panel" style={{ flex: '2 1 0', padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Spend by Category</div>
-            <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>Of total spent {fmt(totalSpent)}</div>
+        <div className="prod-panel" style={{ flex: '2 1 0', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Spend by Category</div>
+              <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>Of total budget</div>
+            </div>
+            {deptRows.length > 0 && (
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>↕ scroll</span>
+            )}
           </div>
-          <div style={{ paddingBottom: 8 }}>
+          <div style={{ overflowY: 'auto', flex: 1, maxHeight: 280, paddingBottom: 8 }}>
             <SpendByCategoryPanel deptRows={deptRows} />
           </div>
         </div>
@@ -318,29 +330,34 @@ export default function ProductionDashboard() {
           />
         </div>
 
-        <div className="prod-panel" style={{ flex: '2 1 0', padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="prod-panel" style={{ flex: '2 1 0', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Recent Payments</div>
-              <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>Last signed schedules</div>
+              <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>All signed schedules</div>
             </div>
+            {allDeductions.length > 0 && (
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{allDeductions.length} total ↕ scroll</span>
+            )}
           </div>
-          {recentDeductions.length === 0 ? (
+          {allDeductions.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '20px' }}>No signed payment schedules yet.</div>
           ) : (
-            recentDeductions.map((d, i) => {
-              const iconBg = i % 3 === 0 ? 'rgba(167,139,250,0.12)' : i % 3 === 1 ? 'rgba(34,201,138,0.1)' : 'rgba(245,158,11,0.1)'
-              return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 8, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📋</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.scheduleNumber} · {d.department}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 1 }}>Signed · {new Date(d.approvedAt).toLocaleDateString('en-GB')}</div>
+            <div style={{ overflowY: 'auto', flex: 1, maxHeight: 280 }}>
+              {allDeductions.map((d, i) => {
+                const iconBg = i % 3 === 0 ? 'rgba(167,139,250,0.12)' : i % 3 === 1 ? 'rgba(34,201,138,0.1)' : 'rgba(245,158,11,0.1)'
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📋</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.scheduleNumber} · {d.department}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 1 }}>Signed · {new Date(d.approvedAt).toLocaleDateString('en-GB')}</div>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-red)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>−{fmt(d.amount)}</div>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-red)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>−{fmt(d.amount)}</div>
-                </div>
-              )
-            })
+                )
+              })}
+            </div>
           )}
         </div>
       </div>

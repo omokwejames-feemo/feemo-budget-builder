@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Feemo Budget Manager — User Manual v2.4</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --purple:     #7C3AED;
+  --purple-lt:  #A78BFA;
+  --purple-bg:  rgba(124,58,237,0.08);
+  --green:      #059669;
+  --green-lt:   #22C98A;
+  --green-bg:   rgba(5,150,105,0.1);
+  --red:        #DC2626;
+  --red-bg:     rgba(220,38,38,0.1);
+  --amber:      #D97706;
+  --amber-bg:   rgba(217,119,6,0.1);
+  --blue:       #2563EB;
+  --blue-bg:    rgba(37,99,235,0.1);
+
+  --bg:         #F0F2F8;
+  --surface:    #FFFFFF;
+  --surface2:   #F8FAFC;
+  --border:     #E2E8F0;
+  --border-lt:  #EDF0F7;
+  --text:       #1A1D2E;
+  --text2:      #4B5563;
+  --text3:      #9CA3AF;
+
+  --sidebar-bg: #FFFFFF;
+  --sidebar-w:  200px;
+  --radius:     12px;
+  --radius-sm:  8px;
+  --radius-pill:100px;
+  --font:       'Plus Jakarta Sans', -apple-system, sans-serif;
+  --mono:       'Space Mono', monospace;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.7;
+}
+
+/* ── Page layout ─────────────────────────────────────────────────────────── */
+.page { max-width: 900px; margin: 0 auto; padding: 0 32px 80px; }
+
+/* ── Cover ───────────────────────────────────────────────────────────────── */
+.cover {
+  min-height: 100vh;
+  background: linear-gradient(145deg, #0b0e17 0%, #1a0a3b 50%, #0d1a3a 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 40px;
+  position: relative;
+  overflow: hidden;
+  page-break-after: always;
+}
+
+.cover::before {
+  content: '';
+  position: absolute;
+  top: -120px; left: -120px;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,58,237,0.25) 0%, transparent 70%);
+}
+.cover::after {
+  content: '';
+  position: absolute;
+  bottom: -80px; right: -80px;
+  width: 400px; height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(167,139,250,0.15) 0%, transparent 70%);
+}
+
+.cover-logo {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 48px;
+  position: relative; z-index: 1;
+}
+.cover-logo-icon {
+  width: 52px; height: 52px;
+  background: linear-gradient(135deg, #a78bfa, #5b21b6);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 20px; color: white;
+}
+.cover-logo-name { font-size: 22px; font-weight: 800; color: #e2e8f0; letter-spacing: -0.5px; }
+.cover-logo-sub  { font-size: 11px; color: #6b7280; font-weight: 500; margin-top: 1px; }
+
+.cover-title {
+  text-align: center;
+  position: relative; z-index: 1;
+  margin-bottom: 48px;
+}
+.cover-title h1 {
+  font-size: 52px; font-weight: 800;
+  color: #e2e8f0;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+  margin-bottom: 12px;
+}
+.cover-title h1 span { color: #a78bfa; }
+.cover-title p {
+  font-size: 16px; color: #6b7280; font-weight: 500;
+}
+.cover-version {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 16px;
+  padding: 6px 16px;
+  background: rgba(167,139,250,0.15);
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: 100px;
+  font-size: 12px; font-weight: 700; color: #a78bfa;
+  letter-spacing: 0.05em;
+}
+
+/* ── Mini dashboard mockup on cover ─────────────────────────────────────── */
+.cover-mockup {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 780px;
+  background: #111526;
+  border: 1px solid #1e2540;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(167,139,250,0.1);
+}
+
+.mock-titlebar {
+  height: 32px;
+  background: #0f1320;
+  border-bottom: 1px solid #1e2540;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 7px;
+}
+.mock-dot { width: 11px; height: 11px; border-radius: 50%; }
+
+.mock-app {
+  display: flex;
+  height: 420px;
+}
+
+/* Sidebar */
+.mock-sidebar {
+  width: 160px;
+  background: #0f1320;
+  border-right: 1px solid #1e2540;
+  flex-shrink: 0;
+  padding: 12px 0;
+}
+.mock-brand {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px 14px;
+  border-bottom: 1px solid #1e2540;
+  margin-bottom: 8px;
+}
+.mock-brand-icon {
+  width: 26px; height: 26px;
+  background: linear-gradient(135deg, #a78bfa, #5b21b6);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; color: white;
+}
+.mock-brand-text { font-size: 11px; font-weight: 700; color: #e2e8f0; }
+.mock-brand-sub  { font-size: 8px; color: #4a5580; }
+
+.mock-section { font-size: 7.5px; font-weight: 700; color: #3a4060; text-transform: uppercase; letter-spacing: 0.08em; padding: 10px 14px 4px; }
+.mock-nav-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 10px; margin: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px; color: #4a5580; font-weight: 500;
+}
+.mock-nav-item.active {
+  background: rgba(167,139,250,0.12);
+  color: #a78bfa;
+  font-weight: 600;
+}
+.mock-nav-icon { font-size: 11px; width: 18px; text-align: center; }
+
+.mock-project-chip {
+  margin: 8px;
+  background: rgba(167,139,250,0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.mock-chip-label { font-size: 7px; color: #4a5580; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+.mock-chip-name  { font-size: 9px; color: #e2e8f0; font-weight: 600; }
+.mock-chip-val   { font-size: 9px; color: #a78bfa; font-weight: 700; margin-top: 1px; }
+
+/* Main content */
+.mock-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #0b0e17;
+}
+
+.mock-topbar {
+  height: 40px;
+  background: #111526;
+  border-bottom: 1px solid #1e2540;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mock-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #1e2540;
+  font-size: 9px;
+}
+.mock-pill-label { color: #4a5580; }
+.mock-pill-value { color: #e2e8f0; font-weight: 600; }
+.mock-pill-green .mock-pill-label { color: #22c98a; }
+.mock-pill.ml-auto { margin-left: auto; }
+
+.mock-screen { flex: 1; padding: 14px; overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
+
+/* KPI row */
+.mock-kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; flex-shrink: 0; }
+.mock-kpi {
+  background: #111526;
+  border: 1px solid #1e2540;
+  border-radius: 10px;
+  padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
+}
+.mock-kpi::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--kpi-c, #a78bfa);
+  border-radius: 10px 10px 0 0;
+}
+.mock-kpi-label { font-size: 7.5px; color: #4a5580; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.mock-kpi-value { font-size: 14px; font-weight: 700; color: #e2e8f0; letter-spacing: -0.5px; margin-bottom: 4px; }
+.mock-kpi-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 7px; border-radius: 100px;
+  font-size: 7px; font-weight: 700;
+  background: rgba(167,139,250,0.15); color: #a78bfa;
+}
+.mock-kpi-badge.green { background: rgba(34,201,138,0.12); color: #22c98a; }
+.mock-kpi-badge.amber { background: rgba(245,158,11,0.12); color: #f59e0b; }
+
+/* Panels row */
+.mock-row { display: grid; gap: 8px; flex: 1; min-height: 0; }
+.mock-row.col-3-2 { grid-template-columns: 3fr 2fr; }
+.mock-row.col-2   { grid-template-columns: 1fr 1fr; }
+
+.mock-panel {
+  background: #111526;
+  border: 1px solid #1e2540;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.mock-panel-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e2540;
+  flex-shrink: 0;
+}
+.mock-panel-title { font-size: 9px; font-weight: 700; color: #e2e8f0; }
+.mock-panel-sub   { font-size: 7.5px; color: #4a5580; margin-top: 1px; }
+
+.mock-dept-item { padding: 7px 12px; border-bottom: 1px solid #1a2035; }
+.mock-dept-row  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.mock-dept-name { font-size: 8.5px; font-weight: 600; color: #e2e8f0; }
+.mock-dept-vals { font-size: 7.5px; color: #4a5580; }
+.mock-dept-chip {
+  font-size: 7px; font-weight: 700; padding: 1px 6px; border-radius: 100px;
+}
+.mock-dept-chip.green { background: rgba(34,201,138,0.12); color: #22c98a; }
+.mock-dept-chip.amber { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.mock-dept-chip.red   { background: rgba(240,90,90,0.12);  color: #f05a5a; }
+.mock-bar-track { height: 4px; background: #1a2035; border-radius: 100px; overflow: hidden; }
+.mock-bar-fill  { height: 100%; border-radius: 100px; }
+
+.mock-cat-item  { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid #1a2035; }
+.mock-cat-dot   { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.mock-cat-name  { flex: 1; font-size: 8px; color: #8892b8; font-weight: 500; }
+.mock-cat-bar   { width: 40px; height: 3px; background: #1a2035; border-radius: 100px; overflow: hidden; flex-shrink: 0; }
+.mock-cat-pct   { font-size: 8px; font-weight: 700; color: #4a5580; width: 22px; text-align: right; }
+
+.mock-tx-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid #1a2035; }
+.mock-tx-icon { width: 24px; height: 24px; border-radius: 6px; background: rgba(167,139,250,0.12); display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; }
+.mock-tx-label { font-size: 8.5px; font-weight: 600; color: #e2e8f0; }
+.mock-tx-sub   { font-size: 7px; color: #4a5580; margin-top: 1px; }
+.mock-tx-amt   { margin-left: auto; font-size: 8.5px; font-weight: 700; color: #f05a5a; flex-shrink: 0; }
+
+/* SVG cashflow sparkline */
+.mock-cashflow { padding: 8px 12px; flex: 1; display: flex; align-items: center; }
+
+/* ── Table of contents ───────────────────────────────────────────────────── */
+.toc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 40px;
+  margin: 48px 0;
+}
+.toc h2 { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 24px; letter-spacing: -0.5px; }
+.toc-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.toc-list li a {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text2);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.toc-list li a:hover { background: var(--purple-bg); color: var(--purple); }
+.toc-num { font-size: 11px; color: var(--text3); font-weight: 600; margin-right: 12px; font-family: var(--mono); }
+.toc-dots { flex: 1; border-bottom: 1px dotted var(--border); margin: 0 12px; }
+.toc-pg { font-size: 11px; color: var(--text3); font-weight: 600; font-family: var(--mono); }
+.toc-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); padding: 16px 14px 4px; }
+
+/* ── Chapter headings ────────────────────────────────────────────────────── */
+.chapter {
+  margin: 72px 0 0;
+  scroll-margin-top: 32px;
+}
+.chapter-num {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-size: 11px; font-weight: 700; color: var(--purple);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+.chapter-num::before {
+  content: '';
+  display: block; width: 24px; height: 2px;
+  background: var(--purple);
+  border-radius: 2px;
+}
+.chapter h2 {
+  font-size: 32px; font-weight: 800; color: var(--text);
+  letter-spacing: -0.8px; line-height: 1.2;
+  margin-bottom: 14px;
+}
+.chapter .lead {
+  font-size: 16px; color: var(--text2); line-height: 1.7;
+  margin-bottom: 32px;
+  border-left: 3px solid var(--purple);
+  padding-left: 18px;
+}
+.chapter-divider {
+  height: 1px; background: var(--border); margin: 48px 0;
+}
+
+/* ── Section within chapter ──────────────────────────────────────────────── */
+.section { margin: 36px 0; }
+.section h3 {
+  font-size: 19px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.4px; margin-bottom: 10px;
+}
+.section p { color: var(--text2); margin-bottom: 14px; }
+.section ul, .section ol {
+  padding-left: 20px; color: var(--text2);
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 14px;
+}
+
+/* ── Feature screen mockups ──────────────────────────────────────────────── */
+.screen-mockup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin: 20px 0 28px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+}
+.screen-mockup-header {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.screen-dot { width: 10px; height: 10px; border-radius: 50%; }
+.screen-title { font-size: 11px; color: var(--text3); font-weight: 600; margin-left: 6px; }
+.screen-content { padding: 20px; }
+.screen-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text3); text-align: center;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Mini KPI card ───────────────────────────────────────────────────────── */
+.kpi-demo-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 4px; }
+.kpi-demo {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-demo::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--c, var(--purple));
+  border-radius: 12px 12px 0 0;
+}
+.kpi-demo-label { font-size: 10px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+.kpi-demo-value { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; margin-bottom: 6px; }
+.kpi-demo-badge {
+  display: inline-flex; padding: 2px 8px; border-radius: 100px;
+  font-size: 10px; font-weight: 700;
+}
+.badge-purple { background: var(--purple-bg); color: var(--purple); }
+.badge-green  { background: var(--green-bg);  color: var(--green);  }
+.badge-amber  { background: var(--amber-bg);  color: var(--amber);  }
+.badge-red    { background: var(--red-bg);    color: var(--red);    }
+
+/* ── Info callout ────────────────────────────────────────────────────────── */
+.callout {
+  display: flex; gap: 14px;
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  margin: 18px 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.callout p { margin: 0; }
+.callout.info    { background: var(--blue-bg);   border-left: 3px solid var(--blue);   color: var(--text2); }
+.callout.tip     { background: var(--green-bg);  border-left: 3px solid var(--green);  color: var(--text2); }
+.callout.warning { background: var(--amber-bg);  border-left: 3px solid var(--amber);  color: var(--text2); }
+.callout.purple  { background: var(--purple-bg); border-left: 3px solid var(--purple); color: var(--text2); }
+
+/* ── Dept bar illustration ───────────────────────────────────────────────── */
+.dept-list-demo { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.dept-list-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 10px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+.dept-list-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.dept-list-sub   { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.dept-item       { padding: 12px 18px; border-bottom: 1px solid var(--border-lt); }
+.dept-item:last-child { border-bottom: none; }
+.dept-item-row   { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.dept-item-name  { font-size: 13px; font-weight: 600; color: var(--text); }
+.dept-item-vals  { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.dept-item-chip  { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 100px; }
+.dept-bar-track  { height: 6px; background: var(--border); border-radius: 100px; overflow: hidden; }
+.dept-bar-fill   { height: 100%; border-radius: 100px; }
+
+/* ── Cashflow chart mockup ───────────────────────────────────────────────── */
+.cashflow-demo { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.cashflow-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 10px; border-bottom: 1px solid var(--border); }
+.cashflow-title  { font-size: 14px; font-weight: 700; color: var(--text); }
+.cashflow-legend { display: flex; gap: 14px; }
+.cashflow-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3); font-weight: 600; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.cashflow-chart { padding: 16px 18px; }
+
+/* ── Spend category demo ─────────────────────────────────────────────────── */
+.cat-demo { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.cat-header { padding: 14px 18px 10px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+.cat-item { display: flex; align-items: center; gap: 10px; padding: 9px 18px; border-bottom: 1px solid var(--border-lt); }
+.cat-item:last-child { border-bottom: none; }
+.cat-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.cat-name { flex: 1; font-size: 12px; color: var(--text); font-weight: 500; }
+.cat-bar-wrap { width: 80px; height: 4px; background: var(--border); border-radius: 100px; overflow: hidden; flex-shrink: 0; }
+.cat-bar-inner { height: 100%; border-radius: 100px; }
+.cat-pct  { font-size: 12px; font-weight: 700; color: var(--text2); width: 30px; text-align: right; }
+
+/* ── Upload flow ─────────────────────────────────────────────────────────── */
+.upload-steps { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin: 16px 0; }
+.upload-step {
+  text-align: center;
+  padding: 16px 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  position: relative;
+}
+.upload-step.active { border-color: var(--purple); background: var(--purple-bg); }
+.upload-step-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text3);
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 8px;
+}
+.upload-step.active .upload-step-num { background: var(--purple); color: white; }
+.upload-step-label { font-size: 10px; font-weight: 600; color: var(--text3); line-height: 1.3; }
+.upload-step.active .upload-step-label { color: var(--purple); }
+
+/* ── Keyboard shortcut table ─────────────────────────────────────────────── */
+.shortcut-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.shortcut-table th {
+  text-align: left; padding: 10px 16px;
+  font-size: 10px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.shortcut-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-lt); }
+.shortcut-table tr:last-child td { border-bottom: none; }
+.shortcut-table tr:hover td { background: var(--surface2); }
+kbd {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: 5px;
+  padding: 2px 7px; color: var(--text);
+  display: inline-block;
+}
+
+/* ── Dept code table ─────────────────────────────────────────────────────── */
+.dept-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dept-table th {
+  text-align: left; padding: 10px 16px;
+  font-size: 10px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.dept-table td { padding: 10px 16px; border-bottom: 1px solid var(--border-lt); color: var(--text2); }
+.dept-table tr:last-child td { border-bottom: none; }
+.dept-table tr:hover td { background: var(--surface2); }
+.dept-code { font-family: var(--mono); font-weight: 700; color: var(--purple); font-size: 12px; }
+
+/* ── Status chips ────────────────────────────────────────────────────────── */
+.chip-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 100px;
+  font-size: 12px; font-weight: 700;
+}
+
+/* ── Print / page breaks ─────────────────────────────────────────────────── */
+@media print {
+  .cover { min-height: 100vh; }
+  .chapter { page-break-before: always; }
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.manual-footer {
+  margin-top: 80px;
+  padding: 32px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text3);
+}
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- COVER PAGE                                                             -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+
+<div class="cover">
+  <div class="cover-logo">
+    <div class="cover-logo-icon">F</div>
+    <div>
+      <div class="cover-logo-name">Feemo</div>
+      <div class="cover-logo-sub">Budget Manager</div>
+    </div>
+  </div>
+
+  <div class="cover-title">
+    <h1>User <span>Manual</span></h1>
+    <p>Complete guide to planning, tracking and controlling your production budget</p>
+    <div class="cover-version">Version 2.4 &nbsp;·&nbsp; April 2026 &nbsp;·&nbsp; Feemovision Limited</div>
+  </div>
+
+  <!-- Mini dashboard mockup -->
+  <div class="cover-mockup">
+    <div class="mock-titlebar">
+      <div class="mock-dot" style="background:#f05a5a"></div>
+      <div class="mock-dot" style="background:#f59e0b"></div>
+      <div class="mock-dot" style="background:#22c98a"></div>
+    </div>
+
+    <div class="mock-app">
+      <!-- Sidebar -->
+      <div class="mock-sidebar">
+        <div class="mock-brand">
+          <div class="mock-brand-icon">F</div>
+          <div>
+            <div class="mock-brand-text">Feemo</div>
+            <div class="mock-brand-sub">Budget Manager</div>
+          </div>
+        </div>
+        <div class="mock-section">Overview</div>
+        <div class="mock-nav-item active"><span class="mock-nav-icon">🎬</span> Dashboard</div>
+        <div class="mock-nav-item"><span class="mock-nav-icon">⊞</span> Assumptions</div>
+        <div class="mock-section">Finance</div>
+        <div class="mock-nav-item"><span class="mock-nav-icon">◫</span> Budget</div>
+        <div class="mock-nav-item"><span class="mock-nav-icon">◐</span> Salary</div>
+        <div class="mock-nav-item"><span class="mock-nav-icon">◇</span> Forecast</div>
+        <div class="mock-section">Payments</div>
+        <div class="mock-nav-item"><span class="mock-nav-icon">◈</span> Payment Schedules</div>
+        <div class="mock-nav-item"><span class="mock-nav-icon">▣</span> Expenditure</div>
+        <div style="margin-top:auto; padding: 8px 6px 0;">
+          <div class="mock-project-chip">
+            <div class="mock-chip-label">Active Project</div>
+            <div class="mock-chip-name">The Last Ember</div>
+            <div class="mock-chip-val">₦296,000,000</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main content -->
+      <div class="mock-main">
+        <div class="mock-topbar">
+          <div class="mock-pill"><span class="mock-pill-label">◻</span><span class="mock-pill-value">The Last Ember</span></div>
+          <div class="mock-pill" style="margin-left:auto;"><span class="mock-pill-label">Health</span><span class="mock-pill-value">92%</span></div>
+          <div class="mock-pill"><span class="mock-pill-label">Spent</span><span class="mock-pill-value">29%</span></div>
+          <div class="mock-pill"><span class="mock-pill-label">Shoot</span><span class="mock-pill-value">42d</span></div>
+        </div>
+
+        <div class="mock-screen">
+          <!-- KPI row -->
+          <div class="mock-kpi-row">
+            <div class="mock-kpi" style="--kpi-c:#a78bfa">
+              <div class="mock-kpi-label">Total Budget</div>
+              <div class="mock-kpi-value">₦296M</div>
+              <div class="mock-kpi-badge">Feature Film</div>
+            </div>
+            <div class="mock-kpi" style="--kpi-c:#f59e0b">
+              <div class="mock-kpi-label">Total Spent</div>
+              <div class="mock-kpi-value">₦87.4M</div>
+              <div class="mock-kpi-badge amber">Watch</div>
+            </div>
+            <div class="mock-kpi" style="--kpi-c:#22c98a">
+              <div class="mock-kpi-label">Remaining</div>
+              <div class="mock-kpi-value">₦208M</div>
+              <div class="mock-kpi-badge green">Available</div>
+            </div>
+            <div class="mock-kpi" style="--kpi-c:#f59e0b">
+              <div class="mock-kpi-label">Shoot Days</div>
+              <div class="mock-kpi-value">42 days</div>
+              <div class="mock-kpi-badge">Pre-prod</div>
+            </div>
+          </div>
+
+          <!-- Two-col panels row -->
+          <div class="mock-row col-3-2" style="flex:1;min-height:0;">
+            <!-- Budget by dept -->
+            <div class="mock-panel">
+              <div class="mock-panel-header">
+                <div class="mock-panel-title">Budget by Department</div>
+                <div class="mock-panel-sub">Spend vs allocation per dept</div>
+              </div>
+              <div class="mock-dept-item">
+                <div class="mock-dept-row">
+                  <div><div class="mock-dept-name">G · Camera</div><div class="mock-dept-vals">₦22.4M / ₦28M</div></div>
+                  <div class="mock-dept-chip amber">Almost reached</div>
+                </div>
+                <div class="mock-bar-track"><div class="mock-bar-fill" style="width:80%;background:#f59e0b"></div></div>
+              </div>
+              <div class="mock-dept-item">
+                <div class="mock-dept-row">
+                  <div><div class="mock-dept-name">D · Director</div><div class="mock-dept-vals">₦3.1M / ₦5.2M</div></div>
+                  <div class="mock-dept-chip green">On track</div>
+                </div>
+                <div class="mock-bar-track"><div class="mock-bar-fill" style="width:60%;background:#22c98a"></div></div>
+              </div>
+              <div class="mock-dept-item">
+                <div class="mock-dept-row">
+                  <div><div class="mock-dept-name">F · Production Staff</div><div class="mock-dept-vals">₦9.1M / ₦8.8M</div></div>
+                  <div class="mock-dept-chip red">Over budget</div>
+                </div>
+                <div class="mock-bar-track"><div class="mock-bar-fill" style="width:100%;background:#f05a5a"></div></div>
+              </div>
+            </div>
+
+            <!-- Spend by Category -->
+            <div class="mock-panel">
+              <div class="mock-panel-header">
+                <div class="mock-panel-title">Spend by Category</div>
+                <div class="mock-panel-sub">Of total spent ₦87.4M</div>
+              </div>
+              <div class="mock-cat-item"><div class="mock-cat-dot" style="background:#7c3aed"></div><div class="mock-cat-name">Camera &amp; Lighting</div><div class="mock-cat-bar"><div class="mock-bar-fill" style="width:80%;background:#7c3aed;height:100%;border-radius:100px"></div></div><div class="mock-cat-pct">46%</div></div>
+              <div class="mock-cat-item"><div class="mock-cat-dot" style="background:#3b82f6"></div><div class="mock-cat-name">Production Staff</div><div class="mock-cat-bar"><div class="mock-bar-fill" style="width:40%;background:#3b82f6;height:100%;border-radius:100px"></div></div><div class="mock-cat-pct">18%</div></div>
+              <div class="mock-cat-item"><div class="mock-cat-dot" style="background:#10b981"></div><div class="mock-cat-name">Locations</div><div class="mock-cat-bar"><div class="mock-bar-fill" style="width:26%;background:#10b981;height:100%;border-radius:100px"></div></div><div class="mock-cat-pct">12%</div></div>
+              <div class="mock-cat-item"><div class="mock-cat-dot" style="background:#f59e0b"></div><div class="mock-cat-name">Art &amp; Props</div><div class="mock-cat-bar"><div class="mock-bar-fill" style="width:22%;background:#f59e0b;height:100%;border-radius:100px"></div></div><div class="mock-cat-pct">11%</div></div>
+              <div class="mock-cat-item"><div class="mock-cat-dot" style="background:#ef4444"></div><div class="mock-cat-name">Talent / Cast</div><div class="mock-cat-bar"><div class="mock-bar-fill" style="width:18%;background:#ef4444;height:100%;border-radius:100px"></div></div><div class="mock-cat-pct">9%</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- MANUAL BODY                                                            -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+
+<div class="page">
+
+  <!-- Table of Contents -->
+  <div class="toc">
+    <h2>Table of Contents</h2>
+    <ul class="toc-list">
+      <div class="toc-section">Release Notes</div>
+      <li><a href="#ch-whats-new"><span class="toc-num">✦</span> What's New in v2.4<span class="toc-dots"></span><span class="toc-pg">02</span></a></li>
+      <div class="toc-section">Getting Started</div>
+      <li><a href="#ch-intro"><span class="toc-num">01</span> Introduction &amp; Overview<span class="toc-dots"></span><span class="toc-pg">03</span></a></li>
+      <li><a href="#ch-start"><span class="toc-num">02</span> Getting Started<span class="toc-dots"></span><span class="toc-pg">03</span></a></li>
+      <div class="toc-section">Core Screens</div>
+      <li><a href="#ch-dashboard"><span class="toc-num">03</span> Production Dashboard<span class="toc-dots"></span><span class="toc-pg">04</span></a></li>
+      <li><a href="#ch-assumptions"><span class="toc-num">04</span> Assumptions<span class="toc-dots"></span><span class="toc-pg">06</span></a></li>
+      <li><a href="#ch-budget"><span class="toc-num">05</span> Production Budget<span class="toc-dots"></span><span class="toc-pg">08</span></a></li>
+      <li><a href="#ch-salary"><span class="toc-num">06</span> Salary Forecast<span class="toc-dots"></span><span class="toc-pg">09</span></a></li>
+      <li><a href="#ch-forecast"><span class="toc-num">07</span> Production Forecast<span class="toc-dots"></span><span class="toc-pg">10</span></a></li>
+      <div class="toc-section">Finance</div>
+      <li><a href="#ch-payments"><span class="toc-num">08</span> Payment Schedules<span class="toc-dots"></span><span class="toc-pg">11</span></a></li>
+      <li><a href="#ch-expenditure"><span class="toc-num">09</span> Expenditure Tracker<span class="toc-dots"></span><span class="toc-pg">13</span></a></li>
+      <div class="toc-section">Reference</div>
+      <li><a href="#ch-upload"><span class="toc-num">10</span> Uploading a Budget from Excel<span class="toc-dots"></span><span class="toc-pg">14</span></a></li>
+      <li><a href="#ch-export"><span class="toc-num">11</span> Export &amp; Reports<span class="toc-dots"></span><span class="toc-pg">15</span></a></li>
+      <li><a href="#ch-shortcuts"><span class="toc-num">12</span> Keyboard Shortcuts<span class="toc-dots"></span><span class="toc-pg">16</span></a></li>
+      <li><a href="#ch-appendix"><span class="toc-num">13</span> Appendix — Department Codes<span class="toc-dots"></span><span class="toc-pg">17</span></a></li>
+    </ul>
+  </div>
+
+
+  <!-- ══ WHAT'S NEW ══════════════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-whats-new">
+    <div class="chapter-num" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border-radius:100px;padding:4px 14px;display:inline-block;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;margin-bottom:12px">What's New</div>
+    <h2>What's New in Version 2.4</h2>
+    <p class="lead">Every release of Feemo Budget Manager begins here — a clear summary of everything that changed since the last version.</p>
+
+    <div class="section">
+      <h3>Scrollable Dashboard Panels</h3>
+      <div class="screen-mockup">
+        <div class="screen-mockup-header">
+          <div class="screen-dot" style="background:#f05a5a"></div>
+          <div class="screen-dot" style="background:#f59e0b"></div>
+          <div class="screen-dot" style="background:#22c98a"></div>
+          <div class="screen-title">Production Dashboard — scrollable panels</div>
+        </div>
+        <div class="screen-content">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px">
+              <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+                <span>Budget by Department</span>
+                <span style="background:var(--purple-bg);color:var(--purple);border-radius:100px;font-size:10px;padding:2px 8px">12 depts ↕ scroll</span>
+              </div>
+              <div style="font-size:11px;color:var(--text2);display:flex;flex-direction:column;gap:6px;max-height:100px;overflow-y:auto">
+                <div style="display:flex;justify-content:space-between"><span>A — Script &amp; Rights</span><span style="font-weight:700">₦800,000</span></div>
+                <div style="height:4px;background:var(--border);border-radius:100px;overflow:hidden;margin-top:-4px"><div style="width:40%;height:100%;background:#7c3aed;border-radius:100px"></div></div>
+                <div style="display:flex;justify-content:space-between"><span>B — Producer</span><span style="font-weight:700">₦1,200,000</span></div>
+                <div style="height:4px;background:var(--border);border-radius:100px;overflow:hidden;margin-top:-4px"><div style="width:65%;height:100%;background:#7c3aed;border-radius:100px"></div></div>
+                <div style="display:flex;justify-content:space-between"><span>C — Direction</span><span style="font-weight:700">₦950,000</span></div>
+                <div style="height:4px;background:var(--border);border-radius:100px;overflow:hidden;margin-top:-4px"><div style="width:55%;height:100%;background:#059669;border-radius:100px"></div></div>
+                <div style="color:var(--text3);font-size:10px;text-align:center;padding-top:4px">↕ scroll to see all 12 departments</div>
+              </div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px">
+              <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+                <span>Recent Payments</span>
+                <span style="background:var(--green-bg);color:var(--green);border-radius:100px;font-size:10px;padding:2px 8px">All ↕ scroll</span>
+              </div>
+              <div style="font-size:11px;color:var(--text2);display:flex;flex-direction:column;gap:6px;max-height:100px;overflow-y:auto">
+                <div style="display:flex;justify-content:space-between"><span style="font-weight:600">SCH-001</span><span style="color:#dc2626;font-weight:700">−₦400,000</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="font-weight:600">SCH-002</span><span style="color:#dc2626;font-weight:700">−₦250,000</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="font-weight:600">SCH-003</span><span style="color:#dc2626;font-weight:700">−₦180,000</span></div>
+                <div style="color:var(--text3);font-size:10px;text-align:center;padding-top:4px">↕ scroll to see all payments</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p>The <strong>Budget by Department</strong>, <strong>Spend by Category</strong>, and <strong>Recent Payments</strong> panels on the Production Dashboard are now fully scrollable. Previously these panels were capped at 6 rows — now they show every department and every payment, with a count badge in the header and a scroll indicator.</p>
+    </div>
+
+    <div class="section">
+      <h3>Export &amp; Reports — Live Spend Summary</h3>
+      <div class="screen-mockup">
+        <div class="screen-mockup-header">
+          <div class="screen-dot" style="background:#f05a5a"></div>
+          <div class="screen-dot" style="background:#f59e0b"></div>
+          <div class="screen-dot" style="background:#22c98a"></div>
+          <div class="screen-title">Export &amp; Reports</div>
+        </div>
+        <div class="screen-content">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;position:relative;overflow:hidden">
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#7c3aed;border-radius:8px 8px 0 0"></div>
+              <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Total Budget</div>
+              <div style="font-size:14px;font-weight:800;color:var(--text)">₦12,000,000</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;position:relative;overflow:hidden">
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#059669;border-radius:8px 8px 0 0"></div>
+              <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Total Spent</div>
+              <div style="font-size:14px;font-weight:800;color:var(--text)">₦4,200,000</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;position:relative;overflow:hidden">
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#059669;border-radius:8px 8px 0 0"></div>
+              <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Remaining</div>
+              <div style="font-size:14px;font-weight:800;color:var(--text)">₦7,800,000</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;position:relative;overflow:hidden">
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#d97706;border-radius:8px 8px 0 0"></div>
+              <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Budget Used</div>
+              <div style="font-size:14px;font-weight:800;color:var(--text)">35.0%</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="background:var(--purple-bg);border:1px solid #7c3aed40;border-radius:8px;padding:12px;cursor:pointer">
+              <div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:4px">↓ Download Excel Workbook</div>
+              <div style="font-size:11px;color:var(--text3)">Full budget + summary of actuals tab</div>
+            </div>
+            <div style="background:var(--green-bg);border:1px solid #05966940;border-radius:8px;padding:12px;cursor:pointer">
+              <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px">↓ Download PDF Summary</div>
+              <div style="font-size:11px;color:var(--text3)">Single-page spend report, print to PDF</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p>The Export screen has been completely redesigned. When a project is in production with approved spend, it now shows:</p>
+      <ul>
+        <li><strong>Live KPI cards</strong> — Total Budget, Total Spent, Remaining, and Budget Used % (colour-coded by threshold).</li>
+        <li><strong>Department Spend Breakdown</strong> — every active department with budgeted vs spent, progress bar, status chip (ON TRACK / AT RISK / OVER BUDGET), and totals footer.</li>
+        <li><strong>Payment History</strong> — every approved payment schedule, newest first, with department and signed date.</li>
+        <li><strong>Download Excel Workbook</strong> — the full budget file, unchanged from previous versions.</li>
+        <li><strong>Download PDF Summary</strong> — opens a print-ready page in a new window with all the above data. Use your browser or OS print dialog to save as PDF.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Download Manual — Sidebar Tab</h3>
+      <p>A new <strong>Download Manual</strong> item (📖) appears in the sidebar navigation under the Notices button. Clicking it opens this manual in a new browser window, where you can read it online or use <kbd>⌘ P</kbd> / <kbd>Ctrl P</kbd> to save a PDF copy to your computer.</p>
+      <div class="callout tip">
+        <div class="callout-icon">💡</div>
+        <p>Every time a new version ships, the manual is updated — starting with the "What's New" section you are reading now — before the old copy is replaced. You always get the current manual for the installed version.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 01: Introduction ══════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-intro">
+    <div class="chapter-num">Chapter 01</div>
+    <h2>Introduction &amp; Overview</h2>
+    <p class="lead">Feemo Budget Manager is a desktop application built for Nigerian film and TV productions. It replaces spreadsheet-based budgeting with a structured, auditable workflow — from first assumptions through to signed payment schedules and live spend tracking.</p>
+
+    <div class="section">
+      <h3>What Feemo does</h3>
+      <ul>
+        <li>Structures your production budget across 27 standard departments</li>
+        <li>Generates payment schedules with VAT and WHT calculations</li>
+        <li>Tracks actual spend against budget in real time</li>
+        <li>Projects monthly cashflow against installment receipts</li>
+        <li>Exports audit-ready PDFs and Excel reports</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Interface overview</h3>
+      <p>The application is divided into three zones:</p>
+      <ul>
+        <li><strong>Sidebar</strong> — navigation between screens, grouped into Overview, Finance, Payments and Project sections. The active project name and budget appear in the footer chip.</li>
+        <li><strong>Topbar</strong> — live status pills showing project name, budget health, live spend percentage, and shoot day count. The theme toggle (☀️ / 🌙) and Upload Budget button live here.</li>
+        <li><strong>Content area</strong> — the active screen fills this space. Each screen auto-saves its state.</li>
+      </ul>
+    </div>
+
+    <div class="callout info">
+      <div class="callout-icon">ℹ️</div>
+      <p><strong>Beta access:</strong> Feemo is currently available to authorised beta testers only. Your access key is issued by Feemovision Limited. Keys are valid for a fixed period — the app will notify you when your access nears expiry.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 02: Getting Started ════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-start">
+    <div class="chapter-num">Chapter 02</div>
+    <h2>Getting Started</h2>
+    <p class="lead">From first launch to a fully loaded project in three steps.</p>
+
+    <div class="section">
+      <h3>Beta Gate</h3>
+      <p>On first launch, Feemo presents the Beta Access screen. Enter your <strong>access key</strong> (format: <code>FEEMO-XXXX-XXXX</code>) and your email address, then tap <strong>Confirm</strong>. A one-time verification code will be sent to your email. Once verified, your session is saved and you won't be asked again until the key expires.</p>
+    </div>
+
+    <div class="section">
+      <h3>Home Screen — starting a project</h3>
+      <p>After passing the gate, the Home Screen presents three entry points:</p>
+      <ul>
+        <li><strong>New Project</strong> — opens a blank project on the Assumptions screen.</li>
+        <li><strong>Open Project</strong> — opens a <code>.feemo</code> file you previously saved, or picks from a recent projects list.</li>
+        <li><strong>Upload Budget</strong> — parses an existing Excel production budget and populates the app automatically (see Chapter 10).</li>
+      </ul>
+
+      <div class="callout tip">
+        <div class="callout-icon">💡</div>
+        <p><strong>Quick reopen:</strong> Recently opened projects are listed on the Home Screen and in the Open Project dialog. Double-clicking a <code>.feemo</code> file in Finder also opens it directly.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Saving your work</h3>
+      <p>Press <kbd>⌘ S</kbd> (Mac) or <kbd>Ctrl S</kbd> (Windows) at any time to save. Use <strong>File → Save As</strong> to export a named <code>.feemo</code> file to a location of your choice. An unsaved-changes indicator (●) appears next to the File nav item whenever there are uncommitted edits. Feemo also writes a crash-recovery snapshot before the window closes — if a session ends unexpectedly, you'll be offered a restore on next launch.</p>
+    </div>
+
+    <div class="section">
+      <h3>Light and Dark mode</h3>
+      <p>Toggle between dark and light themes at any time using the ☀️ / 🌙 button in the top-right of the topbar. Your preference is saved across sessions.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 03: Production Dashboard ══════════════════════════════════════ -->
+  <div class="chapter" id="ch-dashboard">
+    <div class="chapter-num">Chapter 03</div>
+    <h2>Production Dashboard</h2>
+    <p class="lead">The command centre for your production. Everything on this screen is derived live from your budget data — no manual entry required.</p>
+
+    <div class="section">
+      <h3>KPI Cards</h3>
+      <p>Four cards summarise the financial state of the project at a glance. Each card has a coloured top stripe and a status badge.</p>
+
+      <div class="screen-mockup">
+        <div class="screen-mockup-header">
+          <div class="screen-dot" style="background:#f05a5a"></div>
+          <div class="screen-dot" style="background:#f59e0b"></div>
+          <div class="screen-dot" style="background:#22c98a"></div>
+          <div class="screen-title">Production Dashboard — KPI Row</div>
+        </div>
+        <div class="screen-content">
+          <div class="kpi-demo-row">
+            <div class="kpi-demo" style="--c:#7c3aed">
+              <div class="kpi-demo-label">Total Budget</div>
+              <div class="kpi-demo-value">₦296M</div>
+              <div class="kpi-demo-badge badge-purple">Feature Film</div>
+            </div>
+            <div class="kpi-demo" style="--c:#d97706">
+              <div class="kpi-demo-label">Total Spent</div>
+              <div class="kpi-demo-value">₦87.4M</div>
+              <div class="kpi-demo-badge badge-amber">Watch</div>
+            </div>
+            <div class="kpi-demo" style="--c:#059669">
+              <div class="kpi-demo-label">Remaining</div>
+              <div class="kpi-demo-value">₦208.6M</div>
+              <div class="kpi-demo-badge badge-green">Available</div>
+            </div>
+            <div class="kpi-demo" style="--c:#d97706">
+              <div class="kpi-demo-label">Shoot Days</div>
+              <div class="kpi-demo-value">42 days</div>
+              <div class="kpi-demo-badge badge-purple">Pre-prod phase</div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-label">KPI cards with coloured stripe, value, and status badge</div>
+      </div>
+
+      <ul>
+        <li><strong>Total Budget</strong> — approved project budget, always shown with a purple stripe.</li>
+        <li><strong>Total Spent</strong> — sum of all signed and approved payment schedules. Badge turns <span class="chip badge-amber" style="font-size:11px;padding:2px 8px">amber</span> above 70% used, <span class="chip badge-red" style="font-size:11px;padding:2px 8px">red</span> above 90%.</li>
+        <li><strong>Remaining</strong> — budget minus total spent. Badge turns <span class="chip badge-amber" style="font-size:11px;padding:2px 8px">Low</span> when below 10% of total, <span class="chip badge-red" style="font-size:11px;padding:2px 8px">Over Budget</span> if negative.</li>
+        <li><strong>Shoot Days</strong> — shows the shoot day count from Assumptions, with the current production phase as the badge (Development → Pre-Production → Principal Photography → Post-Production).</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Budget by Department</h3>
+      <p>A list of your top departments showing how much has been spent versus the allocation. Each row has a coloured progress bar and a status chip.</p>
+
+      <div class="screen-mockup">
+        <div class="screen-mockup-header">
+          <div class="screen-dot" style="background:#f05a5a"></div>
+          <div class="screen-dot" style="background:#f59e0b"></div>
+          <div class="screen-dot" style="background:#22c98a"></div>
+          <div class="screen-title">Budget by Department</div>
+        </div>
+        <div class="screen-content" style="padding:0">
+          <div class="dept-list-demo">
+            <div class="dept-list-header">
+              <div>
+                <div class="dept-list-title">Budget by Department</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">Spend vs allocation per dept</div>
+              </div>
+            </div>
+            <div class="dept-item">
+              <div class="dept-item-row">
+                <div><div class="dept-item-name">G · Camera Department</div><div style="font-size:11px;color:var(--text3);margin-top:1px">₦22,400,000 / ₦28,000,000</div></div>
+                <span class="dept-item-chip" style="background:var(--amber-bg);color:var(--amber)">Almost reached</span>
+              </div>
+              <div class="dept-bar-track"><div class="dept-bar-fill" style="width:80%;background:var(--amber)"></div></div>
+            </div>
+            <div class="dept-item">
+              <div class="dept-item-row">
+                <div><div class="dept-item-name">D · Director</div><div style="font-size:11px;color:var(--text3);margin-top:1px">₦3,100,000 / ₦5,200,000</div></div>
+                <span class="dept-item-chip" style="background:var(--green-bg);color:var(--green)">On track</span>
+              </div>
+              <div class="dept-bar-track"><div class="dept-bar-fill" style="width:60%;background:var(--green)"></div></div>
+            </div>
+            <div class="dept-item">
+              <div class="dept-item-row">
+                <div><div class="dept-item-name">F · Production Staff</div><div style="font-size:11px;color:var(--text3);margin-top:1px">₦9,100,000 / ₦8,800,000</div></div>
+                <span class="dept-item-chip" style="background:var(--red-bg);color:var(--red)">Over budget</span>
+              </div>
+              <div class="dept-bar-track"><div class="dept-bar-fill" style="width:100%;background:var(--red)"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-label">Each row: department name · spent / budgeted · status chip · progress bar</div>
+      </div>
+
+      <div class="chip-row">
+        <span class="chip" style="background:var(--green-bg);color:var(--green)">● On track — more than 15% budget remaining in dept</span>
+        <span class="chip" style="background:var(--amber-bg);color:var(--amber)">● Almost reached — less than 15% remaining</span>
+        <span class="chip" style="background:var(--red-bg);color:var(--red)">● Over budget — spent exceeds allocation</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Spend by Category</h3>
+      <p>Shows the top six departments as a share of total budget allocation — coloured dot, department name, proportional bar, and percentage. This is a quick visual of where budget weight sits.</p>
+
+      <div class="screen-mockup">
+        <div class="screen-mockup-header">
+          <div class="screen-dot" style="background:#f05a5a"></div>
+          <div class="screen-dot" style="background:#f59e0b"></div>
+          <div class="screen-dot" style="background:#22c98a"></div>
+          <div class="screen-title">Spend by Category panel</div>
+        </div>
+        <div class="screen-content" style="padding:0">
+          <div class="cat-demo">
+            <div class="cat-header">
+              <div style="font-size:14px;font-weight:700;color:var(--text)">Spend by Category</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">Of total budget ₦296M</div>
+            </div>
+            <div class="cat-item"><div class="cat-dot" style="background:#7c3aed"></div><div class="cat-name">Camera &amp; Lighting</div><div class="cat-bar-wrap"><div class="cat-bar-inner" style="width:80%;background:#7c3aed"></div></div><div class="cat-pct">46%</div></div>
+            <div class="cat-item"><div class="cat-dot" style="background:#3b82f6"></div><div class="cat-name">Production Staff</div><div class="cat-bar-wrap"><div class="cat-bar-inner" style="width:40%;background:#3b82f6"></div></div><div class="cat-pct">18%</div></div>
+            <div class="cat-item"><div class="cat-dot" style="background:#10b981"></div><div class="cat-name">Locations</div><div class="cat-bar-wrap"><div class="cat-bar-inner" style="width:28%;background:#10b981"></div></div><div class="cat-pct">12%</div></div>
+            <div class="cat-item"><div class="cat-dot" style="background:#f59e0b"></div><div class="cat-name">Art &amp; Props</div><div class="cat-bar-wrap"><div class="cat-bar-inner" style="width:24%;background:#f59e0b"></div></div><div class="cat-pct">11%</div></div>
+            <div class="cat-item"><div class="cat-dot" style="background:#ef4444"></div><div class="cat-name">Talent / Cast</div><div class="cat-bar-wrap"><div class="cat-bar-inner" style="width:20%;background:#ef4444"></div></div><div class="cat-pct">9%</div></div>
+          </div>
+        </div>
+        <div class="screen-label">Category share of total budget — dot · name · bar · percentage</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Cashflow Projection</h3>
+      <p>An SVG line chart projecting cumulative spend (purple line) vs cumulative income from installment receipts (green dashed line) across the project timeline. Vertical dashed lines mark each installment month. The chart derives spend from your budget total evenly distributed over the total production months.</p>
+
+      <div class="screen-mockup">
+        <div class="screen-mockup-header">
+          <div class="screen-dot" style="background:#f05a5a"></div>
+          <div class="screen-dot" style="background:#f59e0b"></div>
+          <div class="screen-dot" style="background:#22c98a"></div>
+          <div class="screen-title">Cashflow Projection chart</div>
+        </div>
+        <div class="screen-content">
+          <div class="cashflow-demo">
+            <div class="cashflow-header">
+              <div>
+                <div class="cashflow-title">Cashflow Projection</div>
+              </div>
+              <div class="cashflow-legend">
+                <div class="cashflow-legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Cum. Spend</div>
+                <div class="cashflow-legend-item"><div class="legend-dot" style="background:#059669"></div> Cum. Income</div>
+              </div>
+            </div>
+            <div class="cashflow-chart">
+              <svg viewBox="0 0 480 120" width="100%" style="overflow:visible">
+                <defs>
+                  <linearGradient id="spend-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.15"/>
+                    <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Grid -->
+                <line x1="0" y1="30" x2="480" y2="30" stroke="#e2e8f0" stroke-width="0.5"/>
+                <line x1="0" y1="60" x2="480" y2="60" stroke="#e2e8f0" stroke-width="0.5"/>
+                <line x1="0" y1="90" x2="480" y2="90" stroke="#e2e8f0" stroke-width="0.5"/>
+                <!-- Spend area -->
+                <path d="M0,108 L60,95 L120,80 L180,63 L240,48 L300,34 L360,20 L420,10 L480,2 L480,110 L0,110 Z" fill="url(#spend-grad)"/>
+                <!-- Spend line -->
+                <path d="M0,108 L60,95 L120,80 L180,63 L240,48 L300,34 L360,20 L420,10 L480,2" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- Income line (installment steps) -->
+                <path d="M0,110 L119,110 L120,45 L239,45 L240,18 L480,18" fill="none" stroke="#059669" stroke-width="2" stroke-dasharray="5 3" stroke-linecap="round"/>
+                <!-- Installment verticals -->
+                <line x1="120" y1="8" x2="120" y2="110" stroke="#059669" stroke-width="1" stroke-dasharray="3 2" opacity="0.4"/>
+                <line x1="240" y1="8" x2="240" y2="110" stroke="#059669" stroke-width="1" stroke-dasharray="3 2" opacity="0.4"/>
+                <!-- Month labels -->
+                <text x="0"   y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">Jan</text>
+                <text x="60"  y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">Feb</text>
+                <text x="120" y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">Mar</text>
+                <text x="180" y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">Apr</text>
+                <text x="240" y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">May</text>
+                <text x="300" y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">Jun</text>
+                <text x="360" y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">Jul</text>
+                <text x="420" y="118" font-size="8" fill="#9ca3af" font-family="Inter,sans-serif">Aug</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="screen-label">Purple = cumulative spend · Green dashed = cumulative income · Verticals = installment receipt months</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Recent Payments</h3>
+      <p>Lists the five most recently approved payment schedules. Each row shows the schedule number, department, sign-off date, and the amount in red (negative, reflecting a deduction from budget). This panel only populates once schedules have been signed and approved in the Expenditure Tracker.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 04: Assumptions ════════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-assumptions">
+    <div class="chapter-num">Chapter 04</div>
+    <h2>Assumptions</h2>
+    <p class="lead">The foundation of every budget. All figures elsewhere in the app derive from the values you set here.</p>
+
+    <div class="section">
+      <h3>Project Details</h3>
+      <p>Fill in your project identity and core parameters:</p>
+      <ul>
+        <li><strong>Title &amp; Company</strong> — appear on every exported document.</li>
+        <li><strong>Format</strong> — Feature Film, Series, Web Series, or Telenovela. Controls how shoot duration is calculated.</li>
+        <li><strong>Total Budget</strong> — the approved production budget in your chosen currency.</li>
+        <li><strong>Shoot Days</strong> — total number of principal photography days.</li>
+        <li><strong>Currency</strong> — NGN, USD, GBP, or EUR. All values display in the selected currency.</li>
+        <li><strong>Production Fee %</strong> — Department II (Contingency / Production Fee) is automatically calculated as this percentage of total budget and is read-only in the Budget screen.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Timeline</h3>
+      <p>Set the duration in months for each production phase: Development, Pre-Production, Principal Photography, and Post-Production. The total feeds the Cashflow Projection chart and the current phase badge on the Shoot Days KPI card.</p>
+
+      <div class="callout warning">
+        <div class="callout-icon">⚠️</div>
+        <p>If no start date or timeline is set, the Cashflow Projection cannot render and the Installment Advisor cannot suggest tranche timing. Set these values before using those features.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Funding Installments</h3>
+      <p>Define the funding tranches for your production. Each installment has a label, a percentage of total budget, and a trigger month (relative to the project start date). The Installment Advisor (on the Payment Schedules screen) can suggest optimal timing automatically based on your cashflow projection.</p>
+      <ul>
+        <li>Percentages must sum to 100% — an amber warning appears if they don't.</li>
+        <li>Reset to empty using the <strong>Reset Installments</strong> button.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Department Allocations</h3>
+      <p>Distribute your total budget across the 27 standard departments as percentages. Each row shows both the percentage field and the derived currency amount — editing either updates the other in real time.</p>
+      <ul>
+        <li>Percentages should total 100%. A running total is shown; an amber warning fires if it doesn't balance.</li>
+        <li>Department II (Contingency / Production Fee) is auto-calculated from your Production Fee % and is locked.</li>
+        <li>Use <strong>Reset Allocations</strong> to clear all percentages.</li>
+      </ul>
+
+      <div class="callout tip">
+        <div class="callout-icon">💡</div>
+        <p><strong>Auto-detect from Excel:</strong> When you upload a budget file, Feemo detects department percentages from the workbook and offers to apply them automatically — with a Scale to 100% option if the detected total doesn't balance.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 05: Production Budget ══════════════════════════════════════════ -->
+  <div class="chapter" id="ch-budget">
+    <div class="chapter-num">Chapter 05</div>
+    <h2>Production Budget</h2>
+    <p class="lead">The detailed line-item budget across all departments. Each line drives the Production Forecast cashflow.</p>
+
+    <div class="section">
+      <h3>Line items</h3>
+      <p>Each budget line has the following fields:</p>
+      <ul>
+        <li><strong>Dept</strong> — the department code (A–II).</li>
+        <li><strong>Schedule No.</strong> — budget schedule reference (e.g. G-01).</li>
+        <li><strong>Detail</strong> — description of the cost item.</li>
+        <li><strong>No.</strong> — number of people or units.</li>
+        <li><strong>Qty</strong> — duration or multiplier (weeks, months, days).</li>
+        <li><strong>Rate</strong> — unit cost.</li>
+        <li><strong>Unit</strong> — how the rate is measured (e.g. per week, per day, flat).</li>
+        <li><strong>I/E</strong> — marks whether the item is Included or Excluded from the main budget total.</li>
+      </ul>
+      <p>The total for each line is <strong>No. × Qty × Rate</strong>. Department totals roll up into the allocation comparison.</p>
+    </div>
+
+    <div class="section">
+      <h3>Budget integrity check</h3>
+      <p>Feemo runs a background integrity check every time line items, forecast overrides, or salary roles change. If the sum of line items differs from the Production Forecast total by more than 1%, a <strong>Mismatch Banner</strong> appears across Budget, Salary, Forecast, and Production screens. The Resolve Mismatch dialog offers three options:</p>
+      <ul>
+        <li><strong>Option A</strong> — proportionally scale the forecast to match the budget.</li>
+        <li><strong>Option B</strong> — adjust the largest department's line items to absorb the gap.</li>
+        <li><strong>Option C</strong> — dismiss and fix manually.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 06: Salary Forecast ════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-salary">
+    <div class="chapter-num">Chapter 06</div>
+    <h2>Salary Forecast</h2>
+    <p class="lead">Per-person monthly salary planning for your crew and cast.</p>
+
+    <div class="section">
+      <h3>Salary roles grid</h3>
+      <p>Each role has:</p>
+      <ul>
+        <li><strong>Role</strong> — job title (e.g. Director of Photography).</li>
+        <li><strong>Dept</strong> — the department this salary draws from.</li>
+        <li><strong>Phase</strong> — the production phase(s) the role is active: Development, Pre-production, Shoot, Post, or All.</li>
+        <li><strong>Monthly amounts</strong> — a column per production month. Enter the monthly salary for that role.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Over-allocation warning</h3>
+      <p>The Salary Forecast compares the total salaries entered against the combined allocation for crew and cast departments (C, D, E, F). If salaries exceed the allocation a red warning banner shows the exact overage and the Grand Total turns red.</p>
+
+      <div class="callout warning">
+        <div class="callout-icon">⚠️</div>
+        <p>Salary data is for planning visibility only — it no longer feeds the Production Forecast cashflow (which derives purely from line items ÷ active phase months since v2.2.0).</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 07: Production Forecast ═══════════════════════════════════════ -->
+  <div class="chapter" id="ch-forecast">
+    <div class="chapter-num">Chapter 07</div>
+    <h2>Production Forecast</h2>
+    <p class="lead">A monthly cashflow view derived automatically from your line items and installment schedule.</p>
+
+    <div class="section">
+      <h3>How the forecast is calculated</h3>
+      <p>For each department, the forecast spend per month equals:</p>
+      <blockquote style="font-family:var(--mono);font-size:13px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--purple);padding:12px 16px;border-radius:8px;color:var(--purple);margin:12px 0">
+        Monthly Spend = Department Line Items Total ÷ Number of Active Phase Months
+      </blockquote>
+      <p>Spend is distributed evenly across all active months, with the last month absorbing any rounding difference. This means updating a line item on the Budget screen instantly updates the forecast — there is no manual sync step.</p>
+    </div>
+
+    <div class="section">
+      <h3>Manual overrides</h3>
+      <p>Individual cells can be overridden by typing directly into the forecast grid. Overridden cells are shown with an indicator. If overrides from a previous session are causing unexpected totals, use the <strong>Reset to Calculated Values</strong> button (visible whenever any overrides are active) to clear them and return to the formula-derived values.</p>
+    </div>
+
+    <div class="section">
+      <h3>Deficit detection</h3>
+      <p>Months where cumulative spend exceeds cumulative income are flagged as deficit months. A <strong>Deficit</strong> pill appears in the topbar and the issues detector highlights affected months. The Installment Advisor on the Payment Schedules screen can resolve deficits automatically.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 08: Payment Schedules ══════════════════════════════════════════ -->
+  <div class="chapter" id="ch-payments">
+    <div class="chapter-num">Chapter 08</div>
+    <h2>Payment Schedules</h2>
+    <p class="lead">Create, export, and track supplier payment schedules — with VAT and WHT applied automatically.</p>
+
+    <div class="section">
+      <h3>Creating a schedule</h3>
+      <ol>
+        <li>Click <strong>New Schedule</strong>. A new schedule is created with the next sequential number (PS-001, PS-002, …).</li>
+        <li>Set global VAT % and WHT % for the schedule, or override per row.</li>
+        <li>Add payee rows: payee name, description, budget code (dept), bank details, and payment value.</li>
+        <li>The payable amount per row is calculated as: <br><code style="font-size:12px;background:var(--surface2);padding:2px 6px;border-radius:4px">Payment Value + (Value × VAT%) − (Value × WHT%)</code></li>
+        <li>Fill in Prepared By, Reviewed By, Approved By fields.</li>
+        <li>Click <strong>Export PDF</strong> to generate the schedule document for signing.</li>
+      </ol>
+    </div>
+
+    <div class="section">
+      <h3>Installment Advisor</h3>
+      <p>The collapsible <strong>Installment Advisor</strong> panel on this screen reads your forecast cashflow and calculates optimal installment timing. It:</p>
+      <ul>
+        <li>Identifies deficit months where spend outpaces income.</li>
+        <li>Proposes 1–5 installment tranches with suggested months and percentages.</li>
+        <li>Renders an SVG cashflow chart showing spend, income, deficit shading, and tranche markers.</li>
+        <li>Writes the suggested installments directly to your Assumptions store when you click <strong>Apply</strong>.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Schedule statuses</h3>
+      <div class="chip-row">
+        <span class="chip" style="background:var(--blue-bg);color:var(--blue)">Draft — created but not yet exported</span>
+        <span class="chip" style="background:var(--amber-bg);color:var(--amber)">Exported — PDF generated, awaiting signature</span>
+        <span class="chip" style="background:var(--green-bg);color:var(--green)">Approved — signed and recorded in Expenditure</span>
+      </div>
+
+      <div class="callout warning">
+        <div class="callout-icon">⚠️</div>
+        <p>Draft schedules older than 48 hours appear as alerts on the Production Dashboard under the Alerts panel. Sign or archive them to clear the alert.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 09: Expenditure Tracker ═══════════════════════════════════════ -->
+  <div class="chapter" id="ch-expenditure">
+    <div class="chapter-num">Chapter 09</div>
+    <h2>Expenditure Tracker</h2>
+    <p class="lead">The single source of truth for actual spend. When a payment schedule is signed and approved here, the amount deducts from the relevant department's budget and updates the Production Dashboard live.</p>
+
+    <div class="section">
+      <h3>Approving a schedule</h3>
+      <ol>
+        <li>Select the payment schedule from the list.</li>
+        <li>Confirm the signed PDF has been received.</li>
+        <li>Set the approval date and click <strong>Approve &amp; Record</strong>.</li>
+        <li>The schedule moves to <strong>Approved</strong> status and the spend amount is added to the department's total in <code>expenditureDeductions</code>.</li>
+      </ol>
+      <p>Once recorded, the Production Dashboard KPI cards, department list, and Recent Payments panel all update immediately.</p>
+    </div>
+
+    <div class="section">
+      <h3>What counts as "spent"</h3>
+      <p>Only <strong>approved</strong> payment schedules contribute to Total Spent on the dashboard. Exported (unsigned) schedules are counted as pending and shown in the Alerts panel. This two-stage gate (Export → Approve) prevents provisional schedules from inflating your spend figures.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 10: Upload ═════════════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-upload">
+    <div class="chapter-num">Chapter 10</div>
+    <h2>Uploading a Budget from Excel</h2>
+    <p class="lead">Import an existing Excel production budget and populate the app in one step — no re-keying required.</p>
+
+    <div class="section">
+      <h3>The 5-stage upload flow</h3>
+
+      <div class="upload-steps">
+        <div class="upload-step active">
+          <div class="upload-step-num">1</div>
+          <div class="upload-step-label">File Selection</div>
+        </div>
+        <div class="upload-step">
+          <div class="upload-step-num">2</div>
+          <div class="upload-step-label">Page Declaration</div>
+        </div>
+        <div class="upload-step">
+          <div class="upload-step-num">3</div>
+          <div class="upload-step-label">Parsing</div>
+        </div>
+        <div class="upload-step">
+          <div class="upload-step-num">4</div>
+          <div class="upload-step-label">Review</div>
+        </div>
+        <div class="upload-step">
+          <div class="upload-step-num">5</div>
+          <div class="upload-step-label">Confirm</div>
+        </div>
+      </div>
+
+      <ol>
+        <li><strong>File Selection</strong> — drag and drop or browse to your <code>.xlsx</code> or <code>.xls</code> file. Files over 500 KB are processed off the main thread to prevent freezes.</li>
+        <li><strong>Page Declaration</strong> — tick which sheet types your file contains: Full Budget, Forecast, Salary Forecast, Dept Summary.</li>
+        <li><strong>Parsing</strong> — Feemo scans each sheet for column headers and classifies the document type. An animated progress bar tracks parsing.</li>
+        <li><strong>Review</strong> — a pre-population summary shows what was detected: total budget, line item count, salary role count, dept allocations, and payment schedule count. Green badges = will be set. Grey = not detected.</li>
+        <li><strong>Confirm</strong> — click <strong>Load into Project</strong>. If existing data is present, an overwrite warning lists what will be replaced.</li>
+      </ol>
+    </div>
+
+    <div class="section">
+      <h3>Department allocation detection</h3>
+      <p>If department figures are detected in the workbook, a dedicated dialog appears before the Review step. It lists each department, its detected percentage, and the grand total. If the total is not 100%, an amber warning appears with a <strong>Scale to 100%</strong> button that proportionally adjusts all percentages. Choose <strong>Apply Detected Allocations</strong> or <strong>Enter Manually</strong> to set them yourself on the Departments tab.</p>
+    </div>
+
+    <div class="section">
+      <h3>Upload audit log</h3>
+      <p>After every successful upload a collapsible <strong>Upload Summary</strong> panel appears on the Production Budget screen showing the file name, timestamp, document type, and a full field-by-field breakdown of what was populated vs missing.</p>
+    </div>
+
+    <div class="callout info">
+      <div class="callout-icon">ℹ️</div>
+      <p>The parser is column-position-independent — it finds headers by name rather than fixed column positions, so Nigerian template formats with non-standard layouts are handled correctly.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 11: Export ═════════════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-export">
+    <div class="chapter-num">Chapter 11</div>
+    <h2>Export &amp; Reports</h2>
+    <p class="lead">Download a full Excel workbook or a one-page PDF spend summary — with live data from your project.</p>
+
+    <div class="section">
+      <h3>Live Spend Summary (top of screen)</h3>
+      <p>When your project has a budget set, four KPI cards appear at the top of the Export screen showing real-time figures pulled from your approved expenditure:</p>
+      <ul>
+        <li><strong>Total Budget</strong> — the grand total entered on the Assumptions screen.</li>
+        <li><strong>Total Spent</strong> — the sum of all approved payment schedules.</li>
+        <li><strong>Remaining</strong> — budget minus spent; turns red if over budget.</li>
+        <li><strong>Budget Used %</strong> — percentage consumed, colour-coded green / amber / red.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Download Excel Workbook</h3>
+      <p>Exports the full production budget as a multi-sheet <code>.xlsx</code> file — one sheet per department, a summary sheet, and (when spend data exists) an Actuals tab showing approved deductions per department. On macOS the OS save dialog opens so you can choose the destination folder.</p>
+    </div>
+
+    <div class="section">
+      <h3>Download PDF Summary</h3>
+      <p>Opens a new browser window with a print-ready single-page spend report. The page is generated entirely from live project data and includes:</p>
+      <ul>
+        <li>Four KPI cards (Total Budget, Total Spent, Remaining, Budget Used %)</li>
+        <li>Department Breakdown table — budgeted vs spent per department, with status chips</li>
+        <li>Payment History table — every approved schedule sorted newest-first</li>
+      </ul>
+      <p>Once the page opens, use <kbd>⌘ P</kbd> (Mac) or <kbd>Ctrl P</kbd> (Windows) and choose <strong>Save as PDF</strong> in the print dialog. The page auto-triggers the print dialog on load.</p>
+      <div class="callout tip">
+        <div class="callout-icon">💡</div>
+        <p>If no spend data exists yet, the "Download PDF Summary" button is disabled. Record approved payment schedules on the Expenditure screen first.</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Department Spend Breakdown</h3>
+      <p>Below the download buttons, a table lists every active department with a horizontal progress bar, spend vs budget values, and a colour-coded status chip: <strong style="color:#059669">ON TRACK</strong> (more than 15% remaining), <strong style="color:#d97706">AT RISK</strong> (less than 15% remaining), or <strong style="color:#dc2626">OVER BUDGET</strong> (spent exceeds allocation).</p>
+    </div>
+
+    <div class="section">
+      <h3>Payment History</h3>
+      <p>Every approved expenditure schedule is listed here, sorted newest-first, with the schedule number, department, signed date, and amount. The footer row shows the total amount paid out across all schedules.</p>
+    </div>
+
+    <div class="section">
+      <h3>Pre-flight Checks</h3>
+      <p>A checklist at the bottom of the Export screen shows the readiness of your project for export. Green ticks confirm required fields; grey items indicate missing data. All items should be green before sharing your workbook externally.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 12: Keyboard Shortcuts ════════════════════════════════════════ -->
+  <div class="chapter" id="ch-shortcuts">
+    <div class="chapter-num">Chapter 12</div>
+    <h2>Keyboard Shortcuts</h2>
+    <p class="lead">All shortcuts work from any screen while the main app window is focused.</p>
+
+    <div class="screen-mockup">
+      <div class="screen-mockup-header">
+        <div class="screen-dot" style="background:#f05a5a"></div>
+        <div class="screen-dot" style="background:#f59e0b"></div>
+        <div class="screen-dot" style="background:#22c98a"></div>
+        <div class="screen-title">Keyboard shortcuts</div>
+      </div>
+      <div class="screen-content" style="padding:0">
+        <table class="shortcut-table">
+          <thead>
+            <tr><th>Action</th><th>Mac</th><th>Windows</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Save project</td><td><kbd>⌘ S</kbd></td><td><kbd>Ctrl S</kbd></td></tr>
+            <tr><td>New project (fresh start)</td><td><kbd>⌘ ⇧ N</kbd></td><td><kbd>Ctrl ⇧ N</kbd></td></tr>
+            <tr><td>Open project</td><td><kbd>⌘ O</kbd></td><td><kbd>Ctrl O</kbd></td></tr>
+            <tr><td>Undo</td><td><kbd>⌘ Z</kbd></td><td><kbd>Ctrl Z</kbd></td></tr>
+            <tr><td>Redo</td><td><kbd>⌘ ⇧ Z</kbd> or <kbd>⌘ Y</kbd></td><td><kbd>Ctrl ⇧ Z</kbd> or <kbd>Ctrl Y</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <div class="callout-icon">💡</div>
+      <p>Undo and redo stack up to 100 steps across all budget data changes. The current stack depth is shown in small counters at the bottom of the sidebar (↩ n / ↪ n). Bulk imports from Excel are recorded as a single undoable action.</p>
+    </div>
+  </div>
+
+  <div class="chapter-divider"></div>
+
+
+  <!-- ══ CH 13: Appendix ═══════════════════════════════════════════════════ -->
+  <div class="chapter" id="ch-appendix">
+    <div class="chapter-num">Chapter 13</div>
+    <h2>Appendix — Department Codes</h2>
+    <p class="lead">Feemo uses 27 standard departments. These codes appear throughout the app — in line items, payment schedule rows, expenditure records, and exports.</p>
+
+    <div class="screen-mockup">
+      <div class="screen-mockup-header">
+        <div class="screen-dot" style="background:#f05a5a"></div>
+        <div class="screen-dot" style="background:#f59e0b"></div>
+        <div class="screen-dot" style="background:#22c98a"></div>
+        <div class="screen-title">Department code reference</div>
+      </div>
+      <div class="screen-content" style="padding:0">
+        <table class="dept-table">
+          <thead><tr><th>Code</th><th>Department</th><th>Code</th><th>Department</th></tr></thead>
+          <tbody>
+            <tr><td class="dept-code">A</td><td>Research &amp; Development</td><td class="dept-code">N</td><td>Make-up / SFX / Hair</td></tr>
+            <tr><td class="dept-code">B</td><td>Script</td><td class="dept-code">O</td><td>Picture Vehicles</td></tr>
+            <tr><td class="dept-code">C</td><td>Producer</td><td class="dept-code">P</td><td>Studio / OB Facilities</td></tr>
+            <tr><td class="dept-code">D</td><td>Director</td><td class="dept-code">Q</td><td>Locations</td></tr>
+            <tr><td class="dept-code">E</td><td>Talent / Cast</td><td class="dept-code">R</td><td>Vehicles</td></tr>
+            <tr><td class="dept-code">F</td><td>Production Staff</td><td class="dept-code">S</td><td>Travel</td></tr>
+            <tr><td class="dept-code">G</td><td>Camera Department</td><td class="dept-code">T</td><td>Accommodation &amp; Meals</td></tr>
+            <tr><td class="dept-code">H</td><td>Sound Department</td><td class="dept-code">AA</td><td>Stock</td></tr>
+            <tr><td class="dept-code">I</td><td>Lighting Department</td><td class="dept-code">DD</td><td>Graphics</td></tr>
+            <tr><td class="dept-code">J</td><td>Art Department</td><td class="dept-code">EE</td><td>Music</td></tr>
+            <tr><td class="dept-code">K</td><td>Set Department</td><td class="dept-code">FF</td><td>Post Production</td></tr>
+            <tr><td class="dept-code">L</td><td>Props Department</td><td class="dept-code">GG</td><td>Overheads</td></tr>
+            <tr><td class="dept-code">M</td><td>Wardrobe</td><td class="dept-code">HH</td><td>Insurance</td></tr>
+            <tr><td class="dept-code" colspan="2" style="color:var(--purple);font-weight:700">II — Contingency / Production Fee</td><td colspan="2" style="color:var(--text3);font-size:12px">Auto-calculated from Production Fee % — read-only</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:32px">
+      <h3>Supported currencies</h3>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--purple);margin-bottom:4px">₦</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">NGN</div>
+          <div style="font-size:11px;color:var(--text3)">Nigerian Naira</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--purple);margin-bottom:4px">$</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">USD</div>
+          <div style="font-size:11px;color:var(--text3)">US Dollar</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--purple);margin-bottom:4px">£</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">GBP</div>
+          <div style="font-size:11px;color:var(--text3)">British Pound</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--purple);margin-bottom:4px">€</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">EUR</div>
+          <div style="font-size:11px;color:var(--text3)">Euro</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Footer -->
+  <div class="manual-footer">
+    <div>
+      <strong>Feemo Budget Manager</strong> &nbsp;·&nbsp; User Manual v2.4 &nbsp;·&nbsp; April 2026
+    </div>
+    <div>
+      Feemovision Limited &nbsp;·&nbsp; james@feemovision.com
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
