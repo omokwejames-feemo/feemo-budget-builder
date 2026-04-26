@@ -119,8 +119,8 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
   const deptRows = DEPARTMENTS
     .map(dept => {
       const code = dept.code as DeptCode
-      const target = getDeptBudget(code, store)
-      if (target <= 0) return null
+      if (getDeptTarget(code, store) <= 0) return null  // 0% allocation = user excluded this dept
+      const target = getDeptBudget(code, store)         // use line items if available, else alloc%
 
       const deptSalaryRoles = salaryRoles.filter(r => r.deptCode === code)
       const salaryByMonth = months.map(m =>
