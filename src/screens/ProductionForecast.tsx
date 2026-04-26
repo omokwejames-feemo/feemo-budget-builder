@@ -106,7 +106,7 @@ function EditableForecastCell({ value, onSave, cur }: { value: number; onSave: (
 
 export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }) {
   const store = useBudgetStore()
-  const { timeline, project, installments, forecastOverrides, forecastLocked, setForecastOverride, setInstallments, setForecastLocked } = store
+  const { timeline, project, installments, forecastOverrides, forecastLocked, setForecastOverride, setInstallments, setForecastLocked, clearForecastOverrides } = store
   const totalMonths = getTotalMonths(timeline)
   const cur = project.currency || 'N'
   const months = Array.from({ length: totalMonths }, (_, i) => i + 1)
@@ -198,6 +198,15 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
         <div className="screen-sub">
           BC-style cashflow matrix. Click any department cell to override its monthly spend.
         </div>
+        {Object.keys(forecastOverrides).length > 0 && (
+          <button
+            className="btn btn-sm"
+            style={{ marginTop: 8, background: 'transparent', color: 'var(--text2)', border: '1px solid var(--border)' }}
+            onClick={clearForecastOverrides}
+          >
+            Reset to Calculated Values
+          </button>
+        )}
       </div>
 
       <div className="summary-stats" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>

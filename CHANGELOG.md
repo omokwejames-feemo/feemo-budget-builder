@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.2.1 — Forecast Override Reset (2026-04-26)
+
+- **Reset to Calculated Values button**: A button now appears on the Production Forecast screen whenever manual cell overrides are active. Clicking it clears all `forecastOverrides`, allowing the v2.2.0 line-items ÷ active-phase-months formula to take full effect. Fixes cases where stale overrides from earlier sessions were preventing the new forecast logic from running.
+
+## v2.2.0 — Production Forecast: Line Items Drive Cashflow (2026-04-26)
+
+- **Production Forecast now derived purely from line items**: Each department's monthly spend is calculated as `lineItems total ÷ number of active phase months`. Spread evenly, with the last month absorbing rounding. Salary roles have no influence on the forecast whatsoever.
+- **Instant updates**: Changing a line item on the Budget screen updates the forecast immediately — no sync step required.
+- **Salary Forecast unchanged**: Remains the place for per-person monthly detail; it no longer feeds into the cashflow view.
+
 ## v2.1.0 — Batch 14b + 15: Percentage Formatting, Installment Advisor, Budget Integrity, Production Dashboard Overhaul (2026-04-25)
 
 - **Percentage formatting standardised (F2)**: New `formatPercent(value, decimals=1)` utility replaces all inline `.toFixed()` calls. Every percentage display across Assumptions, Budget Wizard, Expenditure Tracker, Salary Forecast, and Production Dashboard now renders to exactly 1 decimal place.
