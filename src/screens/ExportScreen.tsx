@@ -135,7 +135,6 @@ tr:hover td{background:#fafafa}
   <span>Generated ${today}</span>
 </div>
 
-<script>window.onload = () => window.print()</script>
 </body>
 </html>`
 }
@@ -145,6 +144,8 @@ export default function ExportScreen() {
   const { project, timeline, installments, salaryRoles, expenditureDeductions } = store
   const [xlsxStatus, setXlsxStatus] = useState<'idle' | 'busy' | 'done' | 'error'>('idle')
   const [xlsxMsg, setXlsxMsg] = useState('')
+  const [pdfStatus, setPdfStatus] = useState<'idle' | 'busy' | 'done' | 'error'>('idle')
+  const [pdfMsg, setPdfMsg] = useState('')
 
   const cur = project.currency || 'NGN'
   const totalMonths = getTotalMonths(timeline)
@@ -190,10 +191,24 @@ export default function ExportScreen() {
     } catch (e) { setXlsxStatus('error'); setXlsxMsg(String(e)) }
   }
 
-  function handlePdfSummary() {
-    const html = generateSummaryHtml(store)
-    const w = window.open('', '_blank', 'width=900,height=700')
-    if (w) { w.document.write(html); w.document.close() }
+  async function handlePdfSummary() {
+    setPdfStatus('busy')
+    setPdfMsg('')
+    try {
+      const html = generateSummaryHtml(store)
+      const slug = (project.title || 'spend-summary').replace(/\s+/g, '_')
+      const filename = `${slug}_Spend_Summary_${new Date().toISOString().split('T')[0]}.pdf`
+      if (window.electronAPI) {
+        const result = await window.electronAPI.printToPdf(html, filename)
+        if (result.success) { setPdfStatus('done'); setPdfMsg(`Saved: ${result.filePath}`) }
+        else { setPdfStatus('idle') }
+      } else {
+        // Browser fallback: open in new tab for manual save-as-PDF
+        const w = window.open('', '_blank', 'width=900,height=700')
+        if (w) { w.document.write(html); w.document.close() }
+        setPdfStatus('done'); setPdfMsg('Opened in new tab — use File > Save as PDF')
+      }
+    } catch (e) { setPdfStatus('error'); setPdfMsg(String(e)) }
   }
 
   const spentStripe = usedPct > 90 ? 'var(--accent-red)' : usedPct > 70 ? 'var(--accent-amber)' : 'var(--accent-green)'
@@ -268,11 +283,15 @@ export default function ExportScreen() {
             className="btn btn-primary"
             style={{ width: '100%', background: 'var(--accent-green)', boxShadow: '0 4px 14px rgba(5,150,105,0.25)' }}
             onClick={handlePdfSummary}
-            disabled={grandBudget === 0}
+            disabled={grandBudget === 0 || pdfStatus === 'busy'}
           >
-            ↓ Download PDF Summary
+            {pdfStatus === 'busy' ? 'Generating…' : pdfStatus === 'done' ? '✓ PDF Saved' : '↓ Download PDF Summary'}
           </button>
           {grandBudget === 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>Set a total budget first to enable this export.</div>}
+          {pdfMsg && <div style={{ fontSize: 10, color: pdfStatus === 'error' ? 'var(--accent-red)' : 'var(--text-muted)', marginTop: 8, lineHeight: 1.4 }}>{pdfMsg}</div>}
+          {pdfStatus === 'done' && (
+            <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 8 }} onClick={() => { setPdfStatus('idle'); setPdfMsg('') }}>Export Again</button>
+          )}
         </div>
       </div>
 
