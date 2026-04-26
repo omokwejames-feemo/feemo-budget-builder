@@ -106,7 +106,7 @@ function EditableForecastCell({ value, onSave, cur }: { value: number; onSave: (
 
 export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }) {
   const store = useBudgetStore()
-  const { timeline, project, installments, salaryRoles, forecastOverrides, forecastLocked, setForecastOverride, setInstallments, setForecastLocked } = store
+  const { timeline, project, installments, forecastOverrides, forecastLocked, setForecastOverride, setInstallments, setForecastLocked } = store
   const totalMonths = getTotalMonths(timeline)
   const cur = project.currency || 'N'
   const months = Array.from({ length: totalMonths }, (_, i) => i + 1)
@@ -115,29 +115,30 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
   const [showSuggestion, setShowSuggestion] = useState(false)
   const [suggestedSchedule, setSuggestedSchedule] = useState<Installment[] | null>(null)
 
-  // ── Dept monthly spend ─────────────────────────────────────────────────────
+  // ── Dept monthly spend — driven directly by line items, not salary roles ────
   const deptRows = DEPARTMENTS
     .map(dept => {
       const code = dept.code as DeptCode
       if (getDeptTarget(code, store) <= 0) return null  // 0% allocation = user excluded this dept
-      const target = getDeptBudget(code, store)         // use line items if available, else alloc%
+      const target = getDeptBudget(code, store)         // line items total if entered, else alloc%
 
-      const deptSalaryRoles = salaryRoles.filter(r => r.deptCode === code)
-      const salaryByMonth = months.map(m =>
-        deptSalaryRoles.reduce((sum, r) => sum + (r.monthlyAmounts[m] || 0), 0)
-      )
-      const totalSalary = salaryByMonth.reduce((s, v) => s + v, 0)
-      const nonSalary = Math.max(0, target - totalSalary)
       const activePhases = DEPT_ACTIVE_PHASES[code] ?? ['DEV', 'PRE-PROD', 'SHOOT', 'POST']
       const activeMonths = months.filter(m => activePhases.includes(getMonthPhase(m, timeline)))
-      const nonSalaryPerMonth = activeMonths.length > 0 ? nonSalary / activeMonths.length : 0
+      const perMonth = activeMonths.length > 0 ? target / activeMonths.length : 0
 
-      const monthly = months.map((m, i) => {
+      const monthly = months.map(m => {
         const overrideKey = `${code}_${m}`
         if (forecastOverrides[overrideKey] !== undefined) return forecastOverrides[overrideKey]
-        const nonSalPart = activeMonths.includes(m) ? nonSalaryPerMonth : 0
-        return Math.round(salaryByMonth[i] + nonSalPart)
+        return activeMonths.includes(m) ? Math.round(perMonth) : 0
       })
+
+      // Absorb rounding into last active month without an override
+      const lastFreeMonth = [...activeMonths].reverse().find(m => forecastOverrides[`${code}_${m}`] === undefined)
+      if (lastFreeMonth !== undefined) {
+        const idx = months.indexOf(lastFreeMonth)
+        const sumExcludingLast = monthly.reduce((s, v, i) => i === idx ? s : s + v, 0)
+        monthly[idx] = Math.max(0, Math.round(target - sumExcludingLast))
+      }
 
       const rowTotal = monthly.reduce((s, v) => s + v, 0)
       return { code, name: dept.name, monthly, total: rowTotal }
@@ -163,19 +164,6 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
   const grandReceipts = totalReceiptsPerMonth.reduce((s, v) => s + v, 0)
   const grandPayments = totalPaymentsPerMonth.reduce((s, v) => s + v, 0)
 
-  // Salary overrun: depts where salary total > dept allocation
-  const salaryOverrunDepts = DEPARTMENTS.map(dept => {
-    const code = dept.code as DeptCode
-    const target = getDeptTarget(code, store)
-    if (target <= 0) return null
-    const deptSalaryRoles = salaryRoles.filter(r => r.deptCode === code)
-    const totalSalary = deptSalaryRoles.reduce((sum, r) =>
-      sum + Object.values(r.monthlyAmounts).reduce((s, v) => s + v, 0), 0)
-    if (totalSalary <= target) return null
-    return { code, name: dept.name, target, totalSalary, overBy: totalSalary - target }
-  }).filter(Boolean) as { code: string; name: string; target: number; totalSalary: number; overBy: number }[]
-
-  const totalSalaryOverrun = salaryOverrunDepts.reduce((s, d) => s + d.overBy, 0)
   const finalBalance = closingBalance[closingBalance.length - 1] ?? 0
   const lowestBalance = Math.min(...closingBalance)
 
@@ -288,28 +276,6 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
             >
               Apply Fix
             </button>
-          </div>
-        </div>
-      )}
-
-      {salaryOverrunDepts.length > 0 && (
-        <div style={{ background: 'rgba(240,96,96,0.08)', border: '1px solid rgba(240,96,96,0.3)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--red)', marginBottom: 8 }}>
-            ⚠ Salary exceeds dept allocation in {salaryOverrunDepts.length} department{salaryOverrunDepts.length > 1 ? 's' : ''} — total overrun: {fmtN(totalSalaryOverrun, cur)}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
-            These departments have more salary entered in the Salary Forecast than their budget allocation allows. This is why Total Payments exceeds the budget.
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {salaryOverrunDepts.map(d => (
-              <div key={d.code} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12 }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)', minWidth: 30 }}>{d.code}</span>
-                <span style={{ color: 'var(--text2)', minWidth: 140 }}>{d.name}</span>
-                <span style={{ color: 'var(--text3)' }}>Alloc: <strong style={{ color: 'var(--text)' }}>{fmtN(d.target, cur)}</strong></span>
-                <span style={{ color: 'var(--text3)' }}>Salary: <strong style={{ color: 'var(--red)' }}>{fmtN(d.totalSalary, cur)}</strong></span>
-                <span style={{ color: 'var(--red)', fontWeight: 700 }}>+{fmtN(d.overBy, cur)} over</span>
-              </div>
-            ))}
           </div>
         </div>
       )}
