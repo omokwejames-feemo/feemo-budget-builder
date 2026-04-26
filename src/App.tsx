@@ -99,6 +99,14 @@ function App() {
   const [showFreshStartConfirm, setShowFreshStartConfirm] = useState(false)
   const [showNotices, setShowNotices] = useState(false)
   const [crashRecoveryFiles, setCrashRecoveryFiles] = useState<string[]>([])
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('feemo-theme') as 'dark' | 'light') || 'dark'
+  })
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('feemo-theme', theme)
+  }, [theme])
 
   // ── Undo / redo ──────────────────────────────────────────────────────────────
   const undoStackRef   = useRef<UndoSnapshot[]>([])
@@ -740,7 +748,21 @@ function App() {
         )}
 
         <div className="sidebar-footer">
-          {appVersion ? `v${appVersion}` : 'v1.0.0'} · Feemovision
+          {store.project.title ? (
+            <div className="sidebar-project-chip">
+              <div className="sidebar-project-chip-label">Active Project</div>
+              <div className="sidebar-project-chip-name">{store.project.title}</div>
+              {store.project.totalBudget > 0 && (
+                <div className="sidebar-project-chip-val">
+                  {store.project.currency || '₦'}{(store.project.totalBudget / 1_000_000).toFixed(1)}M
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '2px 4px' }}>
+              {appVersion ? `v${appVersion}` : ''} · Feemovision
+            </div>
+          )}
         </div>
       </aside>
 
@@ -795,6 +817,14 @@ function App() {
               style={{ fontSize: 11 }}
             >
               ↑ Upload Budget
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              title="Toggle light / dark mode"
+              style={{ fontSize: 14, padding: '5px 10px' }}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
             </button>
           </div>
         </header>

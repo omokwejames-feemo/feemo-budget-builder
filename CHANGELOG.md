@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.3.0 — UI Redesign: Plus Jakarta Sans, Purple Accent, Light/Dark Mode (2026-04-26)
+
+- **Font**: Switched from DM Sans to Plus Jakarta Sans across the entire app — cleaner, more modern geometric letterforms matching the new design language
+- **Purple accent**: Primary accent colour updated to purple (#A78BFA dark / #7C3AED light) across nav, buttons, badges, and interactive elements
+- **Light / Dark mode**: Full dual-theme system via `data-theme` attribute on `<html>`. Toggle button (☀️/🌙) added to the topbar — preference persists across sessions via localStorage
+- **Sidebar redesign**: Brand logo now uses gradient pill, nav items use rounded pill active state with left-edge indicator bar, nav grouped into labelled sections, project chip in footer shows active project name and budget
+- **Cards**: Increased border-radius to 16px, added subtle box-shadow, card titles are now full-weight instead of uppercase muted labels
+- **Buttons**: Rounded to pill shape, primary button carries a soft purple shadow
+- **Topbar**: Now uses surface background with border and shadow for depth separation from the content area
+
 ## v2.2.3 — Dept Allocation Detection on Upload (2026-04-26)
 
 - **Dept allocation confirmation dialog**: After uploading an Excel budget, if department figures are detected the app now shows a dedicated dialog before the review screen. It lists each detected department with its calculated percentage and a grand total. If the total ≠ 100% an amber warning appears with a **Scale to 100%** option that proportionally adjusts all percentages. The user can **Apply Detected Allocations** to accept the values or **Enter Manually** to jump straight to the Departments tab and type them in.
