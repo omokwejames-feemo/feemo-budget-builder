@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.2.2 — Dept Allocation Detection on Upload (2026-04-26)
+
+- **Dept allocation confirmation dialog**: After uploading an Excel budget, if department figures are detected the app now shows a dedicated dialog before the review screen. It lists each detected department with its calculated percentage and a grand total. If the total ≠ 100% an amber warning appears with a **Scale to 100%** option that proportionally adjusts all percentages. The user can **Apply Detected Allocations** to accept the values or **Enter Manually** to jump straight to the Departments tab and type them in.
+
 ## v2.2.1 — Forecast Override Reset (2026-04-26)
 
 - **Reset to Calculated Values button**: A button now appears on the Production Forecast screen whenever manual cell overrides are active. Clicking it clears all `forecastOverrides`, allowing the v2.2.0 line-items ÷ active-phase-months formula to take full effect. Fixes cases where stale overrides from earlier sessions were preventing the new forecast logic from running.

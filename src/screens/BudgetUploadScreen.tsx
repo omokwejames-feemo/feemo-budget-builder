@@ -262,6 +262,10 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const [parseTookTooLong, setParseTookTooLong] = useState(false)
   const [parseError, setParseError] = useState('')
 
+  // Dept allocation confirmation dialog
+  const [showDeptAllocDialog, setShowDeptAllocDialog] = useState(false)
+  const [deptAllocScaled, setDeptAllocScaled] = useState(false)
+
   // Existing confirm-stage state
   const [pw, setPw] = useState<ParsedWorkbook | null>(null)
   const [edit, setEdit] = useState<EditState | null>(null)
@@ -330,13 +334,24 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
 
       await new Promise(resolve => setTimeout(resolve, 300))
 
+      const editState = toEditState(result)
       setPw(result)
-      setEdit(toEditState(result))
+      setEdit(editState)
       setConflicts(result.conflicts.map(c => ({ ...c, chosenSource: null })))
       setDetectedType(result.documentType)
       if (result.conflicts.length > 0) setSection('conflicts')
       else setSection('summary')
       setUploadFlowStage('confirm')
+
+      // Show dept allocation dialog if any allocations were detected
+      const hasDetectedAllocs = DEPARTMENTS.some(d => {
+        const pct = editState.deptPct[d.code]
+        return pct !== undefined && parseFloat(pct) > 0
+      })
+      if (hasDetectedAllocs) {
+        setDeptAllocScaled(false)
+        setShowDeptAllocDialog(true)
+      }
 
       const isSparse = result.documentType === 'dept-summary' || result.matchStats.deptCoverage < 0.6
       if (isSparse) setShowWizard(true)
@@ -1416,6 +1431,109 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
         />
       </WizardErrorBoundary>
     )}
+
+    {/* Dept allocation confirmation dialog */}
+    {showDeptAllocDialog && edit && (() => {
+      const rows = DEPARTMENTS
+        .map(d => ({ code: d.code, name: d.name, pct: parseFloat(edit.deptPct[d.code] ?? '0') || 0 }))
+        .filter(r => r.pct > 0)
+
+      const rawTotal = rows.reduce((s, r) => s + r.pct, 0)
+      const totalOff = Math.abs(rawTotal - 100) > 0.1
+
+      const displayRows = deptAllocScaled && rawTotal > 0
+        ? rows.map(r => ({ ...r, pct: (r.pct / rawTotal) * 100 }))
+        : rows
+      const displayTotal = displayRows.reduce((s, r) => s + r.pct, 0)
+
+      function applyAndClose(scaled: boolean) {
+        if (!edit) return
+        const source = scaled && rawTotal > 0
+          ? rows.map(r => ({ ...r, pct: (r.pct / rawTotal) * 100 }))
+          : rows
+        const updated = { ...edit.deptPct }
+        for (const r of source) updated[r.code] = r.pct.toFixed(2)
+        setEdit(prev => prev ? { ...prev, deptPct: updated } : prev)
+        setShowDeptAllocDialog(false)
+      }
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, maxWidth: 540, width: '92%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 12px 48px rgba(0,0,0,0.7)' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Dept Allocations Detected</div>
+            <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20, lineHeight: 1.6 }}>
+              The uploaded file contains department budget figures. Apply these as your allocation percentages, or enter them manually.
+            </div>
+
+            {/* Table */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text3)', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Code</th>
+                  <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text3)', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Department</th>
+                  <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--text3)', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayRows.map(r => (
+                  <tr key={r.code} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ padding: '6px 8px', fontFamily: 'monospace', color: 'var(--accent)', fontWeight: 700 }}>{r.code}</td>
+                    <td style={{ padding: '6px 8px', color: 'var(--text)' }}>{r.name}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{r.pct.toFixed(2)}%</td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop: '2px solid var(--border)' }}>
+                  <td colSpan={2} style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text2)', fontSize: 12 }}>TOTAL</td>
+                  <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, fontSize: 13, fontVariantNumeric: 'tabular-nums', color: totalOff && !deptAllocScaled ? 'var(--accent)' : 'var(--green)' }}>
+                    {displayTotal.toFixed(2)}%
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Gap warning + scale option */}
+            {totalOff && !deptAllocScaled && (
+              <div style={{ background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.3)', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>
+                  Total is {rawTotal.toFixed(2)}% — not 100%
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10, lineHeight: 1.5 }}>
+                  This may be because some departments weren't detected, or the file uses a different total. You can scale all percentages proportionally to sum to 100%, or apply as-is and adjust manually.
+                </div>
+                <button
+                  onClick={() => setDeptAllocScaled(true)}
+                  style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', background: 'var(--accent)', color: '#000', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Scale to 100%
+                </button>
+              </div>
+            )}
+            {deptAllocScaled && (
+              <div style={{ fontSize: 12, color: 'var(--green)', marginBottom: 16, fontWeight: 600 }}>
+                ✓ Percentages scaled proportionally to sum to 100%
+                <button onClick={() => setDeptAllocScaled(false)} style={{ marginLeft: 10, fontSize: 11, background: 'transparent', color: 'var(--text3)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}>Undo</button>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => { setShowDeptAllocDialog(false); setSection('departments') }}
+                style={S.btnGhost}
+              >
+                Enter Manually
+              </button>
+              <button
+                onClick={() => applyAndClose(deptAllocScaled)}
+                style={S.btnPrimary}
+              >
+                Apply Detected Allocations
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    })()}
 
     {/* Overwrite warning modal */}
     {showOverwriteWarning && (() => {
