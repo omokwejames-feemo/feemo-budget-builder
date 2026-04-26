@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, Timeline, getDeptTarget, getTotalMonths, getMonthLabel, getMonthPhase, DEPT_ACTIVE_PHASES } from '../store/budgetStore'
+import { useBudgetStore, DEPARTMENTS, DeptCode, Installment, Timeline, getDeptTarget, getDeptBudget, getTotalMonths, getMonthLabel, getMonthPhase, DEPT_ACTIVE_PHASES } from '../store/budgetStore'
 import { Issue } from '../hooks/useIssueDetector'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatPercent } from '../utils/formatPercent'
@@ -119,7 +119,7 @@ export default function ProductionForecast({ issues = [] }: { issues?: Issue[] }
   const deptRows = DEPARTMENTS
     .map(dept => {
       const code = dept.code as DeptCode
-      const target = getDeptTarget(code, store)
+      const target = getDeptBudget(code, store)
       if (target <= 0) return null
 
       const deptSalaryRoles = salaryRoles.filter(r => r.deptCode === code)

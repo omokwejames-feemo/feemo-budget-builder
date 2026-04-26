@@ -409,6 +409,12 @@ export function getDeptActual(code: DeptCode, store: Pick<BudgetState, 'lineItem
   return (store.lineItems[code] || []).reduce((sum, item) => sum + (item.no ?? 1) * item.qty * item.rate, 0)
 }
 
+// Preferred target for forecasts: line items total when entered, allocation% as fallback
+export function getDeptBudget(code: DeptCode, store: Pick<BudgetState, 'project' | 'deptAllocations' | 'lineItems'>): number {
+  const lineTotal = getDeptActual(code, store)
+  return lineTotal > 0 ? lineTotal : getDeptTarget(code, store)
+}
+
 export function isSeriesFormat(format: string) {
   return format === 'TV Series' || format === 'Web Series'
 }

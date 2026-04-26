@@ -5,6 +5,7 @@ import {
   calcSeriesShootDays, calcSeriesShootMonths,
   calcTeleShootDays, calcTeleShootMonths,
   isAutofillReady, TEMPLATE_JURIYA, TEMPLATE_BC,
+  getDeptActual,
 } from '../store/budgetStore'
 import { JURIYA_FULL, BC_FULL } from '../export/templateData'
 import { applyFullTemplate, applyParsedBudget } from '../export/applyTemplate'
@@ -62,6 +63,7 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
     timeline, setTimeline,
     installments, setInstallments,
     deptAllocations, setDeptAllocation,
+    lineItems,
     resetStore, resetTimeline, resetInstallments, resetDeptAllocations,
     companyProfile, setCompanyProfile,
     forecastLocked, setForecastLocked,
@@ -89,7 +91,10 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
   const isSeries = isSeriesFormat(project.format)
   const isTele = isTelenovela(project.format)
   const isEp = isEpisodic(project.format)
-  const totalPct = Object.values(deptAllocations).reduce((s, v) => s + v, 0)
+  const totalLI = DEPARTMENTS.reduce((s, d) => s + getDeptActual(d.code as DeptCode, { lineItems }), 0)
+  const totalPct = totalLI > 0 && project.totalBudget > 0
+    ? (totalLI / project.totalBudget) * 100
+    : Object.values(deptAllocations).reduce((s, v) => s + v, 0)
   const pctClass = Math.abs(totalPct - 100) < 0.01 ? 'ok' : totalPct > 100 ? 'over' : 'under'
   const totalMonths = timeline.developmentMonths + timeline.preProdMonths + timeline.shootMonths + timeline.postMonths
   const autofillReady = isAutofillReady(project, timeline, installments)
@@ -679,25 +684,37 @@ export default function AssumptionsDashboard({ issues = [] }: { issues?: Issue[]
         <div className="card-body">
           <div className="allocation-grid">
             {DEPARTMENTS.map(dept => {
-              const pct = deptAllocations[dept.code as DeptCode] || 0
-              const amt = (pct / 100) * project.totalBudget
+              const code = dept.code as DeptCode
+              const pct = deptAllocations[code] || 0
+              const liTotal = getDeptActual(code, { lineItems })
+              const hasLineItems = liTotal > 0
+              const displayAmt = hasLineItems ? liTotal : (pct / 100) * project.totalBudget
+              const displayPct = hasLineItems && project.totalBudget > 0
+                ? (liTotal / project.totalBudget) * 100
+                : pct
               return (
-                <div className="alloc-row" key={dept.code}>
-                  <span className="alloc-code">{dept.code}</span>
+                <div className="alloc-row" key={code}>
+                  <span className="alloc-code">{code}</span>
                   <span className="alloc-name" title={dept.name}>{dept.name}</span>
-                  <div className="alloc-pct">
+                  <div className="alloc-pct" style={{ position: 'relative' }}>
                     <input
                       type="number"
                       step="0.1"
                       min="0"
                       max="100"
-                      value={pct > 0 ? parseFloat(pct.toFixed(2)) : ''}
-                      onChange={e => setDeptAllocation(dept.code as DeptCode, Number(e.target.value))}
+                      value={hasLineItems ? parseFloat(displayPct.toFixed(2)) : (pct > 0 ? parseFloat(pct.toFixed(2)) : '')}
+                      onChange={e => { if (!hasLineItems) setDeptAllocation(code, Number(e.target.value)) }}
                       onFocus={e => e.target.select()}
                       placeholder="0"
+                      readOnly={hasLineItems}
+                      title={hasLineItems ? 'Driven by Budget line items — edit items on the Budget screen' : undefined}
+                      style={{ opacity: hasLineItems ? 0.6 : 1, cursor: hasLineItems ? 'default' : undefined }}
                     />
                   </div>
-                  <span className="alloc-n">{pct > 0 ? fmt(amt, project.currency) : '—'}</span>
+                  <span className="alloc-n" style={{ color: hasLineItems ? 'var(--green)' : undefined }}>
+                    {displayAmt > 0 ? fmt(displayAmt, project.currency) : '—'}
+                    {hasLineItems && <span style={{ fontSize: 9, color: 'var(--text3)', marginLeft: 4 }}>LI</span>}
+                  </span>
                 </div>
               )
             })}

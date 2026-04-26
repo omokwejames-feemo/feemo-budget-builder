@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   useBudgetStore, DEPARTMENTS, DeptCode, SalaryRole,
-  getTotalMonths, getMonthLabel, getMonthPhase, getDeptTarget,
+  getTotalMonths, getMonthLabel, getMonthPhase, getDeptTarget, getDeptBudget,
   DEPT_ACTIVE_PHASES
 } from '../store/budgetStore'
 import { formatCurrency } from '../utils/formatCurrency'
@@ -121,7 +121,7 @@ export default function SalaryForecast() {
     const salaryTotal = deptRoles.reduce((sum, r) =>
       sum + Object.values(r.monthlyAmounts).reduce((s, v) => s + v, 0), 0)
     if (salaryTotal === 0) return null
-    const budget = getDeptTarget(code, store)
+    const budget = getDeptBudget(code, store)
     const remaining = budget - salaryTotal
     return { code, name: dept.name, budget, salaryTotal, remaining, over: remaining < 0 }
   }).filter(Boolean) as { code: string; name: string; budget: number; salaryTotal: number; remaining: number; over: boolean }[]
