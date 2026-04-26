@@ -8,7 +8,6 @@ import { deriveNextMilestone } from '../utils/deriveNextMilestone'
 import IdentityStrip from '../components/production/IdentityStrip'
 import KpiRow from '../components/production/KpiRow'
 import DeficitAlertBar from '../components/production/DeficitAlertBar'
-import DeptBarChart from '../components/production/DeptBarChart'
 import ShootProgressBlock from '../components/production/ShootProgressBlock'
 import DeptStatusTable from '../components/production/DeptStatusTable'
 
@@ -140,44 +139,35 @@ function CashflowChart({ totalBudget, installments, startDate, timeline, currenc
   )
 }
 
-function SpendByCategoryPanel({ deptRows, currency }: {
+function SpendByCategoryPanel({ deptRows }: {
   deptRows: { code: string; name: string; budgeted: number; spent: number }[]
-  currency: string
 }) {
-  const fmt = (n: number) => formatCurrency(n, currency)
-  const sorted = [...deptRows].filter(d => d.budgeted > 0).sort((a, b) => b.budgeted - a.budgeted).slice(0, 7)
-  const maxBudget = sorted[0]?.budgeted || 1
+  const totalBudget = deptRows.reduce((s, d) => s + d.budgeted, 0) || 1
+  const sorted = [...deptRows].filter(d => d.budgeted > 0).sort((a, b) => b.budgeted - a.budgeted).slice(0, 6)
+  const maxPct = (sorted[0]?.budgeted / totalBudget) * 100 || 1
 
   if (sorted.length === 0) {
-    return <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '24px 0', textAlign: 'center' }}>No department allocations set.</div>
+    return <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '20px', textAlign: 'center' }}>No department allocations set.</div>
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <>
       {sorted.map((d, i) => {
         const color = DEPT_COLORS[i % DEPT_COLORS.length]
-        const budgetWidth = (d.budgeted / maxBudget) * 100
-        const spentWidth = d.budgeted > 0 ? Math.min(100, (d.spent / d.budgeted) * budgetWidth) : 0
+        const pct = (d.budgeted / totalBudget) * 100
+        const barWidth = (pct / maxPct) * 100
         return (
-          <div key={d.code}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>{d.name}</span>
-              </div>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.budgeted)}</span>
+          <div key={d.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+            <div style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+            <div style={{ width: 60, height: 4, background: 'var(--border-subtle)', borderRadius: 100, overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ height: '100%', width: `${barWidth}%`, background: color, borderRadius: 100 }} />
             </div>
-            <div style={{ height: 6, background: 'var(--border-subtle)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${budgetWidth}%`, background: `${color}30`, borderRadius: 3, position: 'relative' }}>
-                {spentWidth > 0 && (
-                  <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${(spentWidth / budgetWidth) * 100}%`, background: color, borderRadius: 3 }} />
-                )}
-              </div>
-            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', width: 32, textAlign: 'right', flexShrink: 0 }}>{Math.round(pct)}%</div>
           </div>
         )
       })}
-    </div>
+    </>
   )
 }
 
@@ -226,7 +216,7 @@ export default function ProductionDashboard() {
       value: fmt(totalBudget),
       sub: 'Approved',
       stripeColor: 'var(--accent-purple)',
-      badge: { text: 'Budget', variant: 'purple' as const },
+      badge: { text: 'Feature Film', variant: 'purple' as const },
     },
     {
       label: 'Total Spent',
@@ -241,11 +231,10 @@ export default function ProductionDashboard() {
       badge: remainingBadge,
     },
     {
-      label: 'Budget Used',
-      value: formatPercent(usedPct),
-      sub: `${formatPercent(100 - usedPct)} remaining`,
-      progress: usedPct,
-      stripeColor: spentStripe,
+      label: 'Shoot Days',
+      value: `${project.shootDays ?? 0} days`,
+      stripeColor: 'var(--accent-amber)',
+      badge: { text: phase?.label || 'Pre-prod phase', variant: 'purple' as const },
     },
   ]
 
@@ -267,22 +256,52 @@ export default function ProductionDashboard() {
       {/* B. KPI Row */}
       <KpiRow items={kpiItems} />
 
-      {/* C. Two-col: Spend vs Budget chart | Spend by Category */}
+      {/* C. Two-col: Budget by Department (list) | Spend by Category */}
       <div className="prod-middle-row">
-        <div className="prod-panel" style={{ flex: '3 1 0' }}>
-          <div className="prod-panel-label">Spend vs Budget — By Department</div>
-          {deptRows.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '20px 0' }}>No department allocations set.</div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <DeptBarChart depts={deptRows.map(d => ({ name: d.code, budgeted: d.budgeted, spent: d.spent }))} />
+
+        {/* Budget by Department — list style matching mockup */}
+        <div className="prod-panel" style={{ flex: '3 1 0', padding: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Budget by Department</div>
+              <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>Spend vs allocation per dept</div>
             </div>
+          </div>
+          {deptRows.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '20px' }}>No department allocations set.</div>
+          ) : (
+            deptRows.slice(0, 6).map(d => {
+              const pct = d.budgeted > 0 ? Math.min(100, (d.spent / d.budgeted) * 100) : 0
+              const barColor = d.status === 'OVER BUDGET' ? 'var(--accent-red)' : d.status === 'AT RISK' ? 'var(--accent-amber)' : 'var(--accent-green)'
+              const chipBg = d.status === 'OVER BUDGET' ? 'rgba(240,90,90,0.1)' : d.status === 'AT RISK' ? 'rgba(245,158,11,0.1)' : 'rgba(34,201,138,0.1)'
+              const chipColor = d.status === 'OVER BUDGET' ? 'var(--accent-red)' : d.status === 'AT RISK' ? 'var(--accent-amber)' : 'var(--accent-green)'
+              const chipText = d.status === 'OVER BUDGET' ? 'Over budget' : d.status === 'AT RISK' ? 'Almost reached' : 'On track'
+              return (
+                <div key={d.code} style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{d.code} · {d.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{fmt(d.spent)} / {fmt(d.budgeted)}</div>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 100, background: chipBg, color: chipColor, letterSpacing: '0.04em' }}>{chipText}</span>
+                  </div>
+                  <div style={{ height: 6, background: 'var(--border-subtle)', borderRadius: 100, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 100 }} />
+                  </div>
+                </div>
+              )
+            })
           )}
         </div>
 
-        <div className="prod-panel" style={{ flex: '2 1 0' }}>
-          <div className="prod-panel-label">Budget Allocation</div>
-          <SpendByCategoryPanel deptRows={deptRows} currency={currency} />
+        <div className="prod-panel" style={{ flex: '2 1 0', padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Spend by Category</div>
+            <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>Of total spent {fmt(totalSpent)}</div>
+          </div>
+          <div style={{ paddingBottom: 8 }}>
+            <SpendByCategoryPanel deptRows={deptRows} />
+          </div>
         </div>
       </div>
 
@@ -299,24 +318,29 @@ export default function ProductionDashboard() {
           />
         </div>
 
-        <div className="prod-panel" style={{ flex: '2 1 0' }}>
-          <div className="prod-panel-label">Recent Transactions</div>
+        <div className="prod-panel" style={{ flex: '2 1 0', padding: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Recent Payments</div>
+              <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 2 }}>Last signed schedules</div>
+            </div>
+          </div>
           {recentDeductions.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '8px 0' }}>No signed payment schedules yet.</div>
+            <div style={{ fontSize: 12, color: 'var(--text-ghost)', padding: '20px' }}>No signed payment schedules yet.</div>
           ) : (
-            recentDeductions.map((d, i) => (
-              <div key={i} className="prod-txn-row" style={{ borderBottom: i < recentDeductions.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
-                <div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>{d.scheduleNumber}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-ghost)' }}>
-                    {d.department} · {new Date(d.approvedAt).toLocaleDateString('en-GB')}
+            recentDeductions.map((d, i) => {
+              const iconBg = i % 3 === 0 ? 'rgba(167,139,250,0.12)' : i % 3 === 1 ? 'rgba(34,201,138,0.1)' : 'rgba(245,158,11,0.1)'
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📋</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.scheduleNumber} · {d.department}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-ghost)', marginTop: 1 }}>Signed · {new Date(d.approvedAt).toLocaleDateString('en-GB')}</div>
                   </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-red)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>−{fmt(d.amount)}</div>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                  {fmt(d.amount)}
-                </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>

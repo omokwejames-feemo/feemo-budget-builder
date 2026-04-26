@@ -637,24 +637,29 @@ function App() {
 
   const NAV_SECTIONS = [
     {
-      label: 'Planning',
+      label: 'Overview',
       items: [
-        { id: 'assumptions' as Screen, label: 'Assumptions',         icon: '⊞' },
         { id: 'production'  as Screen, label: 'Dashboard',           icon: '🎬' },
+        { id: 'assumptions' as Screen, label: 'Assumptions',         icon: '⊞' },
+      ],
+    },
+    {
+      label: 'Finance',
+      items: [
         { id: 'budget'      as Screen, label: 'Budget',              icon: '◫' },
         { id: 'salary'      as Screen, label: 'Salary',              icon: '◐' },
         { id: 'forecast'    as Screen, label: 'Forecast',            icon: '◇' },
       ],
     },
     {
-      label: 'Finance',
+      label: 'Payments',
       items: [
-        { id: 'payments'    as Screen, label: 'Payments',            icon: '◈' },
+        { id: 'payments'    as Screen, label: 'Payment Schedules',   icon: '◈' },
         { id: 'expenditure' as Screen, label: 'Expenditure',         icon: '▣' },
       ],
     },
     {
-      label: 'Manage',
+      label: 'Project',
       items: [
         { id: 'export'      as Screen, label: 'Export',              icon: '↗' },
         { id: 'file'        as Screen, label: 'File',                icon: '◻' },
@@ -669,8 +674,23 @@ function App() {
     <div className="app">
       {/* ── Sidebar ── */}
       <aside className="sidebar">
+        {/* Traffic-light spacer: titleBarStyle=hiddenInset puts macOS buttons here */}
+        <div className="sidebar-trafficlight-spacer" />
         <div className="sidebar-brand">
-          <span className="brand-logo">F</span>
+          <div style={{ width: 32, height: 32, flexShrink: 0 }}>
+            <img
+              src="./feemo-logo.png"
+              alt="Feemo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 8 }}
+              onError={e => {
+                const el = e.currentTarget as HTMLImageElement
+                el.style.display = 'none'
+                const fb = el.nextElementSibling as HTMLElement | null
+                if (fb) fb.style.display = 'flex'
+              }}
+            />
+            <span className="brand-logo" style={{ display: 'none' }}>F</span>
+          </div>
           <div>
             <div className="brand-name">Feemo</div>
             <div className="brand-sub">Budget Manager</div>

@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.3.3 — Dashboard Polish: Feemo Logo, Traffic Light Fix, Mockup Parity (2026-04-26)
+
+- **Feemo logo restored**: Sidebar now shows the Feemo image logo with gradient "F" pill as fallback — replaces the always-on "FB" pill from v2.3.1
+- **macOS traffic light fix**: Added a 28px draggable spacer above the sidebar brand so the red/yellow/green window buttons no longer bleed over the logo
+- **Nav sections match mockup**: Sidebar sections renamed Overview / Finance / Payments / Project — Dashboard moved to top of Overview, Payment Schedules renamed in nav
+- **4th KPI card → Shoot Days**: Replaces "Budget Used" — shows shoot day count with current phase badge (Development / Pre-Production / Principal Photography / Post-Production)
+- **Budget by Department list**: Replaced the old bar chart with the mockup's list-style card — each dept shows name, spend/budget values, coloured progress bar, and on track / almost reached / over budget chip
+- **Spend by Category panel**: Updated to mockup cat-row style — coloured dot, dept name, horizontal bar, percentage of total budget
+- **Recent Payments panel**: Added 📋 icon with coloured background, spend amounts shown in red with − prefix, sub-line shows signed date
+
 ## v2.3.1 — Production Dashboard Overhaul: KPI Badges, Cashflow Chart, Spend by Category (2026-04-26)
 
 - **KPI card stripe + badge**: Each card on the Production Dashboard now has a 3px coloured top stripe and a status badge (purple for Budget, dynamic green/amber/red for Spent/Remaining based on thresholds)
