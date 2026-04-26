@@ -981,7 +981,16 @@ process.on('unhandledRejection', async (reason) => {
 // Disabling hardware acceleration prevents this at the cost of software rendering.
 app.disableHardwareAcceleration()
 
-app.whenReady().then(() => { createWindow(); buildAppMenu() })
+app.whenReady().then(() => {
+  createWindow()
+  buildAppMenu()
+
+  // Background update checks: once on launch (after window loads) + every 4 hours
+  if (app.isPackaged) {
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000)
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000)
+  }
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
