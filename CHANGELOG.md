@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.2.2 — Dept Allocation Detection on Upload (2026-04-26)
+## v2.2.3 — Dept Allocation Detection on Upload (2026-04-26)
 
 - **Dept allocation confirmation dialog**: After uploading an Excel budget, if department figures are detected the app now shows a dedicated dialog before the review screen. It lists each detected department with its calculated percentage and a grand total. If the total ≠ 100% an amber warning appears with a **Scale to 100%** option that proportionally adjusts all percentages. The user can **Apply Detected Allocations** to accept the values or **Enter Manually** to jump straight to the Departments tab and type them in.
 
