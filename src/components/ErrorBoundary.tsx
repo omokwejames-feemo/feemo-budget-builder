@@ -105,9 +105,34 @@ export class ErrorBoundary extends Component<Props, State> {
     )
 
     if (fullScreen) {
+      // Use hard-coded colours so the card is visible even if CSS variables
+      // aren't loaded yet (e.g. the crash happened before the theme was applied).
       return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99998, background: 'var(--bg-base)' }}>
-          {fallback}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99998, background: '#0b0e17', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{
+            background: '#1e2540', border: '1px solid #a78bfa',
+            borderRadius: 14, padding: '36px 44px', maxWidth: 480, width: '90%',
+            boxShadow: '0 0 60px rgba(167,139,250,0.15)', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 36, marginBottom: 14 }}>⚠️</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0', marginBottom: 6 }}>
+              Something went wrong
+            </div>
+            {region && (
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>
+                {region}
+              </div>
+            )}
+            <p style={{ fontSize: 13, color: '#8892b8', lineHeight: 1.7, marginBottom: 24 }}>
+              {errorMessage}
+            </p>
+            <button
+              onClick={() => window.electronAPI?.restartApp?.()}
+              style={{ width: '100%', padding: '12px 0', background: '#a78bfa', color: '#fff', fontWeight: 700, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}
+            >
+              Restart App
+            </button>
+          </div>
         </div>
       )
     }

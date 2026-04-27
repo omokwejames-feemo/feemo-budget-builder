@@ -87,16 +87,19 @@ export function useIssueDetector(): Issue[] {
     }
 
     // ── Forecast / cashflow issues ─────────────────────────────────────────
-    if (totalMonths > 0 && budget > 0 && installments.length > 0) {
+    // Clamp here as a second safety layer — prevents RangeError if the value
+    // somehow bypasses getTotalMonths (e.g. corrupt rehydrated state).
+    const safeMonths = Math.min(totalMonths, 1200)
+    if (safeMonths > 0 && budget > 0 && installments.length > 0) {
       // Compute simplified payments-per-month distribution
-      const payments = new Array(totalMonths).fill(0)
+      const payments = new Array(safeMonths).fill(0)
       DEPARTMENTS.forEach(dept => {
         if (dept.code === 'II') return
         const target = (deptAllocations[dept.code as DeptCode] / 100) * budget
         if (!target) return
         const activePhases = DEPT_ACTIVE_PHASES[dept.code as DeptCode] ?? ['DEV', 'PRE-PROD', 'SHOOT', 'POST']
         const activeMonths: number[] = []
-        for (let m = 1; m <= totalMonths; m++) {
+        for (let m = 1; m <= safeMonths; m++) {
           if (activePhases.includes(getMonthPhase(m, timeline))) activeMonths.push(m)
         }
         if (!activeMonths.length) return
@@ -105,16 +108,16 @@ export function useIssueDetector(): Issue[] {
       })
 
       // Compute receipts-per-month from installments
-      const receipts = new Array(totalMonths).fill(0)
+      const receipts = new Array(safeMonths).fill(0)
       installments.forEach(inst => {
-        const m = Math.max(1, Math.min(inst.month, totalMonths))
+        const m = Math.max(1, Math.min(inst.month, safeMonths))
         receipts[m - 1] += (inst.percentage / 100) * budget
       })
 
       // Find first negative balance month
       let balance = 0
       let firstGap = 0
-      for (let i = 0; i < totalMonths; i++) {
+      for (let i = 0; i < safeMonths; i++) {
         balance += receipts[i] - payments[i]
         if (balance < 0 && !firstGap) { firstGap = i + 1 }
       }

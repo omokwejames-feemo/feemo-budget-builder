@@ -360,6 +360,26 @@ export const useBudgetStore = create<BudgetState>()(
     }),
     {
       name: 'feemo-budget-v1',
+      // Bump to version 1 so existing users' stored state is migrated through
+      // sanitizePersistedTimeline on next launch, clearing any corrupt month values.
+      version: 1,
+      migrate: (raw) => {
+        const s = (raw ?? {}) as Record<string, unknown>
+        if (s.timeline && typeof s.timeline === 'object') {
+          const t = s.timeline as Record<string, unknown>
+          const cap = (v: unknown) => {
+            const n = Number(v)
+            return isNaN(n) || !isFinite(n) || n < 0 ? 0 : Math.min(Math.floor(n), MAX_MONTHS)
+          }
+          s.timeline = {
+            developmentMonths: cap(t.developmentMonths),
+            preProdMonths:     cap(t.preProdMonths),
+            shootMonths:       cap(t.shootMonths),
+            postMonths:        cap(t.postMonths),
+          }
+        }
+        return s
+      },
       partialize: (s) => ({
         project: s.project,
         timeline: s.timeline,
@@ -380,10 +400,15 @@ export const useBudgetStore = create<BudgetState>()(
   )
 )
 
+// 1200 months (100 years) is a hard ceiling — prevents RangeError if persisted
+// state ever contains a corrupt value (e.g. budget amount stored in month field).
+const MAX_MONTHS = 1200
+
 export function getTotalMonths(timeline: Timeline) {
   const sum = (timeline.developmentMonths || 0) + (timeline.preProdMonths || 0) +
     (timeline.shootMonths || 0) + (timeline.postMonths || 0)
-  return isFinite(sum) && sum >= 0 ? Math.floor(sum) : 0
+  if (!isFinite(sum) || sum < 0) return 0
+  return Math.min(Math.floor(sum), MAX_MONTHS)
 }
 
 export function getMonthLabel(monthIndex: number, timeline: Timeline, startDate: string): string {
