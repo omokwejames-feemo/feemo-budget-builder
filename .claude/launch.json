@@ -3,9 +3,15 @@
   "configurations": [
     {
       "name": "feemo-budget-builder",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:vite"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["cross-env", "VITE_WEB_ONLY=true", "vite", "--port", "5173"],
       "port": 5173
+    },
+    {
+      "name": "feemo-mockup",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-s", "/Users/jamesomokwe/Documents", "-p", "5174", "--no-clipboard"],
+      "port": 5174
     }
   ]
 }

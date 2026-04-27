@@ -20,7 +20,7 @@ export default defineConfig({
     electron([
       {
         entry: 'electron/main.ts',
-        onstart(args) { args.startup() },
+        onstart(args) { if (!process.env.VITE_WEB_ONLY) args.startup() },
         vite: {
           define: emailDefines,
           build: {

@@ -12,6 +12,14 @@ import { google } from 'googleapis'
 import { createHash, randomInt } from 'crypto'
 import ElectronStore from 'electron-store'
 
+// Prevent macOS from killing the GPU process under memory/sandbox pressure.
+// Without this, the GPU process exits with SIGTERM when rendering complex layouts,
+// taking the renderer with it and causing a blank/unresponsive window.
+if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('disable-gpu-sandbox')
+  app.commandLine.appendSwitch('ignore-gpu-blocklist')
+}
+
 // ── Auto-updater setup ────────────────────────────────────────────────────────
 
 autoUpdater.autoDownload = false
@@ -514,12 +522,17 @@ function createWindow() {
     title: 'Feemo Budget Manager',
   })
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
-    mainWindow.webContents.openDevTools()
+  const devUrl = process.env.VITE_DEV_SERVER_URL
+
+  if (devUrl) {
+    mainWindow.loadURL(devUrl)
   } else {
     mainWindow.loadFile(join(__dirname, '../dist/index.html'))
   }
+
+  mainWindow.center()
+  mainWindow.show()
+  mainWindow.focus()
 
   mainWindow.on('closed', () => { mainWindow = null })
 
@@ -1004,5 +1017,10 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
+  } else {
+    mainWindow?.show()
+    mainWindow?.focus()
+  }
 })
