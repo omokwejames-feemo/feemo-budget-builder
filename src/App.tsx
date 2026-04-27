@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useBudgetStore, BudgetState } from './store/budgetStore'
+import FeemoAccount from './components/FeemoAccount'
+import { onFeemoAuthChange } from './utils/feemoAuth'
+import type { FeemoUser } from './utils/feemoAuth'
+import { pushToCloud } from './utils/feemoSync'
 import { AppErrorBoundary, PageErrorBoundary } from './components/ErrorBoundary'
 import HomeScreen from './screens/HomeScreen'
 import NoticesDrawer from './components/NoticesDrawer'
@@ -102,11 +106,56 @@ function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('feemo-theme') as 'dark' | 'light') || 'dark'
   })
+  const [feemoUser, setFeemoUser] = useState<FeemoUser | null>(null)
+  const [showFeemoAccount, setShowFeemoAccount] = useState(false)
+  const [lastCloudSync, setLastCloudSync] = useState<number | null>(null)
+  const [cloudSyncing, setCloudSyncing] = useState(false)
+  const cloudSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('feemo-theme', theme)
   }, [theme])
+
+  // ── Feemo cloud auth listener ────────────────────────────────────────────────
+  useEffect(() => {
+    const unsub = onFeemoAuthChange((user) => setFeemoUser(user))
+    return unsub
+  }, [])
+
+  // ── Debounced cloud push (2s after any store change, only when signed in) ────
+  useEffect(() => {
+    if (!feemoUser) return
+    const unsub = useBudgetStore.subscribe(() => {
+      if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current)
+      cloudSyncTimerRef.current = setTimeout(async () => {
+        const s = useBudgetStore.getState()
+        const state = {
+          project: s.project,
+          timeline: s.timeline,
+          installments: s.installments,
+          deptAllocations: s.deptAllocations,
+          lineItems: s.lineItems,
+          salaryRoles: s.salaryRoles,
+          forecastOverrides: s.forecastOverrides,
+          forecastLocked: s.forecastLocked,
+          companyProfile: s.companyProfile,
+          paymentSchedules: s.paymentSchedules,
+          expenditureDeductions: s.expenditureDeductions,
+          notices: s.notices,
+        }
+        setCloudSyncing(true)
+        await pushToCloud(feemoUser.uid, state as Record<string, unknown>, 'desktop')
+        setCloudSyncing(false)
+        setLastCloudSync(Date.now())
+      }, 2000)
+    })
+    return () => {
+      unsub()
+      if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feemoUser])
 
   // ── Undo / redo ──────────────────────────────────────────────────────────────
   const undoStackRef   = useRef<UndoSnapshot[]>([])
@@ -777,6 +826,39 @@ function App() {
               {appVersion ? `v${appVersion}` : ''} · Feemovision
             </div>
           )}
+
+          {/* Feemo Sync pill */}
+          <button
+            onClick={() => setShowFeemoAccount(true)}
+            title={feemoUser ? `Signed in as ${feemoUser.email}` : 'Sign in to enable cloud sync'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              width: '100%', marginTop: 8, padding: '7px 10px',
+              background: feemoUser ? 'rgba(46,204,113,0.08)' : 'transparent',
+              border: `1px solid ${feemoUser ? 'rgba(46,204,113,0.2)' : 'var(--border)'}`,
+              borderRadius: 8, cursor: 'pointer',
+              fontSize: 11, color: feemoUser ? '#2ecc71' : 'var(--text3)',
+              fontFamily: 'var(--font-ui)', fontWeight: 600,
+              textAlign: 'left',
+            }}
+          >
+            {feemoUser ? (
+              <>
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#2ecc71', flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {feemoUser.email && feemoUser.email.length > 18
+                    ? feemoUser.email.slice(0, 18) + '…'
+                    : feemoUser.email}
+                </span>
+                <span style={{ flexShrink: 0, opacity: cloudSyncing ? 0.5 : 1 }}>{cloudSyncing ? '⟳' : '☁'}</span>
+              </>
+            ) : (
+              <>
+                <span style={{ opacity: 0.5 }}>☁</span>
+                <span>Feemo Sync</span>
+              </>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -894,6 +976,9 @@ function App() {
 
       {saveToast && (
         <div className="save-toast">✓ Saved</div>
+      )}
+      {showFeemoAccount && (
+        <FeemoAccount onClose={() => setShowFeemoAccount(false)} />
       )}
     </div>
   )
