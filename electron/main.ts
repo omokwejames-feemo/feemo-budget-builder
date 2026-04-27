@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, nativeImage, shell, Menu } from 'e
 import { autoUpdater } from 'electron-updater'
 import { join, dirname } from 'path'
 import { writeFile as writeFileAsync, readFile as readFileAsync, unlink, readdir, appendFile } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, readdirSync, unlinkSync } from 'fs'
 import { spawn } from 'child_process'
 import { tmpdir, homedir } from 'os'
 import { createServer } from 'http'
@@ -982,6 +982,17 @@ process.on('unhandledRejection', async (reason) => {
 app.disableHardwareAcceleration()
 
 app.whenReady().then(() => {
+  // Delete stale IndexedDB LOCK files left by forcibly killed previous instances
+  try {
+    const idbDir = join(app.getPath('userData'), 'IndexedDB')
+    if (existsSync(idbDir)) {
+      for (const entry of readdirSync(idbDir)) {
+        const lockFile = join(idbDir, entry, 'LOCK')
+        if (existsSync(lockFile)) { try { unlinkSync(lockFile) } catch {} }
+      }
+    }
+  } catch {}
+
   createWindow()
   buildAppMenu()
 
