@@ -12,10 +12,15 @@ import { google } from 'googleapis'
 import { createHash, randomInt } from 'crypto'
 import ElectronStore from 'electron-store'
 
-// Prevent macOS from killing the GPU process under memory/sandbox pressure.
-// Without this, the GPU process exits with SIGTERM when rendering complex layouts,
-// taking the renderer with it and causing a blank/unresponsive window.
+// GPU stability on macOS: the GPU process is a separate OS-level process that
+// macOS can independently kill under memory pressure (SIGTERM / exit 15), which
+// takes the renderer with it and produces a blank window.
+// --in-process-gpu: merge GPU into the main browser process so it can't be
+//   killed independently by the OS.
+// --disable-gpu-sandbox: remove the extra sandbox layer that triggers kills.
+// --ignore-gpu-blocklist: don't fall back to software when GPU is "blocklisted".
 if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('in-process-gpu')
   app.commandLine.appendSwitch('disable-gpu-sandbox')
   app.commandLine.appendSwitch('ignore-gpu-blocklist')
 }

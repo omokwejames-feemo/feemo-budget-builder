@@ -104,7 +104,9 @@ function App() {
   const [showNotices, setShowNotices] = useState(false)
   const [crashRecoveryFiles, setCrashRecoveryFiles] = useState<string[]>([])
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('feemo-theme') as 'dark' | 'light') || 'dark'
+    const t = (localStorage.getItem('feemo-theme') as 'dark' | 'light') || 'dark'
+    document.documentElement.dataset.theme = t  // apply before first render so error boundaries are visible
+    return t
   })
   const [feemoUser, setFeemoUser] = useState<FeemoUser | null>(null)
   const [showFeemoAccount, setShowFeemoAccount] = useState(false)
