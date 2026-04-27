@@ -669,6 +669,31 @@ function App() {
           <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
         )}
         {freshStartDialog}
+        {/* Feemo Sync floating button on home screen */}
+        <button
+          onClick={() => setShowFeemoAccount(true)}
+          title={feemoUser ? `Signed in as ${feemoUser.email}` : 'Sign in to enable cloud sync'}
+          style={{
+            position: 'fixed', bottom: 20, right: 20, zIndex: 9000,
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 14px',
+            background: feemoUser ? 'rgba(46,204,113,0.12)' : 'var(--bg2)',
+            border: `1px solid ${feemoUser ? 'rgba(46,204,113,0.3)' : 'var(--border)'}`,
+            borderRadius: 20, cursor: 'pointer',
+            fontSize: 11, color: feemoUser ? '#2ecc71' : 'var(--text3)',
+            fontFamily: 'var(--font-ui)', fontWeight: 600,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+          }}
+        >
+          {feemoUser ? (
+            <><span style={{ width: 6, height: 6, borderRadius: 3, background: '#2ecc71', display: 'inline-block' }} />
+            <span>{feemoUser.email!.length > 20 ? feemoUser.email!.slice(0, 20) + '…' : feemoUser.email}</span>
+            <span>☁</span></>
+          ) : (
+            <><span style={{ opacity: 0.6 }}>☁</span><span>Feemo Sync</span></>
+          )}
+        </button>
+        {showFeemoAccount && <FeemoAccount onClose={() => setShowFeemoAccount(false)} />}
       </>
     )
   }
