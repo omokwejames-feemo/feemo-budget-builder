@@ -139,7 +139,7 @@ function App() {
           salaryRoles: s.salaryRoles,
           forecastOverrides: s.forecastOverrides,
           forecastLocked: s.forecastLocked,
-          companyProfile: s.companyProfile,
+          companyProfile: s.companyProfile ? { ...s.companyProfile, logoDataUrl: '' } : s.companyProfile,
           paymentSchedules: s.paymentSchedules,
           expenditureDeductions: s.expenditureDeductions,
           notices: s.notices,
