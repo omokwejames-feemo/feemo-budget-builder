@@ -499,21 +499,19 @@ function App() {
     )
   }
 
-  // ── Access expiry notice (shown once per launch after gate passes) ──────────
-  if (showExpiryNotice && accessExpiresAt !== null) {
+  // ── Access expiry notice — rendered as overlay so the app loads behind it ────
+  const expiryNoticeDialog = (showExpiryNotice && accessExpiresAt !== null) ? (() => {
     const msLeft = accessExpiresAt - Date.now()
     const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)))
     const expiryDate = new Date(accessExpiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     const urgent = daysLeft <= 1
     const warning = daysLeft <= 2
-
     return (
       <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ background: 'var(--bg-surface)', border: `1px solid ${urgent ? 'var(--accent-red)' : warning ? 'var(--accent-amber)' : 'var(--border-default)'}`, borderRadius: 16, padding: '44px 48px', maxWidth: 440, width: '90%', textAlign: 'center', boxShadow: '0 24px 80px rgba(0,0,0,0.7)' }}>
           <div style={{ fontSize: 36, marginBottom: 18 }}>{urgent ? '⚠' : '🔑'}</div>
           <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Beta Access</div>
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 24 }}>Feemo Budget Manager</div>
-
           {daysLeft === 0 ? (
             <p style={{ fontSize: 15, color: 'var(--accent-red)', fontWeight: 700, lineHeight: 1.6, marginBottom: 8 }}>
               Your beta access expires <strong>today</strong>.
@@ -525,12 +523,10 @@ function App() {
               </strong> remaining on your beta access key.
             </p>
           )}
-
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 28 }}>
             Access expires on <strong style={{ color: 'var(--text-secondary)' }}>{expiryDate}</strong>.
             {(urgent || warning) && <><br />Contact <a href="mailto:james@feemovision.com" style={{ color: 'var(--accent-blue)', textDecoration: 'none' }}>james@feemovision.com</a> to extend your access.</>}
           </p>
-
           <button
             onClick={() => setShowExpiryNotice(false)}
             style={{ width: '100%', padding: '13px 0', background: 'var(--accent-blue)', color: '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'var(--font-ui)', border: 'none', borderRadius: 8, cursor: 'pointer' }}
@@ -540,7 +536,7 @@ function App() {
         </div>
       </div>
     )
-  }
+  })() : null
 
   // Crash recovery dialog
   const crashRecoveryDialog = crashRecoveryFiles.length > 0 ? (
@@ -678,6 +674,7 @@ function App() {
           <UpdateDialog update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />
         )}
         {freshStartDialog}
+        {expiryNoticeDialog}
         {showFeemoAccount && <FeemoAccount onClose={() => setShowFeemoAccount(false)} />}
       </>
     )
@@ -977,6 +974,7 @@ function App() {
       )}
       {freshStartDialog}
       {crashRecoveryDialog}
+      {expiryNoticeDialog}
       {showNotices && (
         <NoticesDrawer
           onClose={() => setShowNotices(false)}
