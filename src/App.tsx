@@ -89,7 +89,7 @@ function budgetDataChanged(a: BudgetState, b: BudgetState): boolean {
 }
 
 function App() {
-  const [accessGranted, setAccessGranted] = useState(false)
+  const [accessGranted, setAccessGranted] = useState(import.meta.env.DEV)
   const [accessExpiresAt, setAccessExpiresAt] = useState<number | null>(null)
   const [showExpiryNotice, setShowExpiryNotice] = useState(false)
   const [appView, setAppView] = useState<'home' | 'app' | 'rebuild' | 'upload'>('home')
