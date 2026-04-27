@@ -17,9 +17,11 @@ interface HomeScreenProps {
   recents: RecentProject[]
   onOpenRecent: (filePath: string) => void
   onRebuild: () => void
+  onSyncClick: () => void
+  feemoUserEmail?: string | null
 }
 
-export default function HomeScreen({ onNewProject, onOpenProject, onUploadBudget, recents, onOpenRecent, onRebuild }: HomeScreenProps) {
+export default function HomeScreen({ onNewProject, onOpenProject, onUploadBudget, recents, onOpenRecent, onRebuild, onSyncClick, feemoUserEmail }: HomeScreenProps) {
   return (
     <div style={{
       height: '100vh',
@@ -29,7 +31,27 @@ export default function HomeScreen({ onNewProject, onOpenProject, onUploadBudget
       justifyContent: 'center',
       background: 'var(--bg)',
       gap: 0,
+      position: 'relative',
     }}>
+      {/* Feemo Sync button — top right */}
+      <button
+        onClick={onSyncClick}
+        style={{
+          position: 'absolute', top: 20, right: 20,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '7px 14px',
+          background: feemoUserEmail ? 'rgba(46,204,113,0.1)' : 'var(--bg2)',
+          border: `1px solid ${feemoUserEmail ? 'rgba(46,204,113,0.3)' : 'var(--border)'}`,
+          borderRadius: 20, cursor: 'pointer',
+          fontSize: 11, color: feemoUserEmail ? '#2ecc71' : 'var(--text3)',
+          fontFamily: 'var(--font-ui)', fontWeight: 600,
+        }}
+      >
+        {feemoUserEmail
+          ? <><span style={{ width: 6, height: 6, borderRadius: 3, background: '#2ecc71', display: 'inline-block' }} /><span>{feemoUserEmail.length > 22 ? feemoUserEmail.slice(0, 22) + '…' : feemoUserEmail}</span><span>☁</span></>
+          : <><span style={{ opacity: 0.5 }}>☁</span><span>Feemo Sync</span></>
+        }
+      </button>
       {/* Logo */}
       <div style={{ width: 96, height: 96, marginBottom: 20 }}>
         <img
