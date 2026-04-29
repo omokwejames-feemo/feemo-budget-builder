@@ -26,40 +26,46 @@ if (process.platform === 'darwin') {
 }
 
 // ── Auto-updater setup ────────────────────────────────────────────────────────
+// Updates are only published for macOS. Skip the updater entirely on Windows
+// and Linux to avoid "file not found" errors when checking GitHub Releases.
 
-autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = false
-autoUpdater.allowPrerelease = false
+const UPDATES_SUPPORTED = process.platform === 'darwin'
 
 // Track the downloaded zip path so we can apply it ourselves (bypassing Squirrel.Mac)
 let downloadedZipPath: string | null = null
 
-autoUpdater.on('update-available', (info) => {
-  const body = typeof info.releaseNotes === 'string'
-    ? info.releaseNotes
-    : Array.isArray(info.releaseNotes)
-      ? info.releaseNotes.map(n => n.note || '').join('\n')
-      : ''
-  mainWindow?.webContents.send('update-available', { version: info.version, body })
-})
+if (UPDATES_SUPPORTED) {
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.allowPrerelease = false
 
-autoUpdater.on('download-progress', (progress) => {
-  mainWindow?.webContents.send('download-progress', {
-    percent: Math.round(progress.percent),
-    downloaded: progress.transferred,
-    total: progress.total,
+  autoUpdater.on('update-available', (info) => {
+    const body = typeof info.releaseNotes === 'string'
+      ? info.releaseNotes
+      : Array.isArray(info.releaseNotes)
+        ? info.releaseNotes.map(n => n.note || '').join('\n')
+        : ''
+    mainWindow?.webContents.send('update-available', { version: info.version, body })
   })
-})
 
-autoUpdater.on('update-downloaded', (event: any) => {
-  // Capture the zip path before Squirrel.Mac can interfere with it
-  downloadedZipPath = event?.downloadedFile ?? null
-  mainWindow?.webContents.send('update-downloaded')
-})
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('download-progress', {
+      percent: Math.round(progress.percent),
+      downloaded: progress.transferred,
+      total: progress.total,
+    })
+  })
 
-autoUpdater.on('error', (err) => {
-  mainWindow?.webContents.send('update-error', err.message)
-})
+  autoUpdater.on('update-downloaded', (event: any) => {
+    // Capture the zip path before Squirrel.Mac can interfere with it
+    downloadedZipPath = event?.downloadedFile ?? null
+    mainWindow?.webContents.send('update-downloaded')
+  })
+
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('update-error', err.message)
+  })
+}
 // ── Encrypted session store ───────────────────────────────────────────────────
 // Encryption key derived from device-specific paths so the store cannot be
 // copied and replayed on a different machine.
@@ -655,6 +661,10 @@ ipcMain.handle('get-app-version', () => app.getVersion())
 
 ipcMain.handle('check-for-updates', async () => {
   const current = app.getVersion()
+  // Updates are macOS-only — no Windows/Linux release assets exist.
+  if (!UPDATES_SUPPORTED) {
+    return { success: true, current, latest: current, hasUpdate: false, body: '' }
+  }
   if (!app.isPackaged) {
     return { success: true, current, latest: current, hasUpdate: false, body: '' }
   }
@@ -675,6 +685,7 @@ ipcMain.handle('check-for-updates', async () => {
 })
 
 ipcMain.handle('download-update', async () => {
+  if (!UPDATES_SUPPORTED) return { success: false, error: 'Auto-update is not available on this platform.' }
   // Retry up to 3 times — GitHub redirects to CDN can trigger ERR_NETWORK_CHANGED
   // in Electron's Chromium net module on the first attempt.
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -1011,7 +1022,8 @@ app.whenReady().then(() => {
   buildAppMenu()
 
   // Background update checks: once on launch (after window loads) + every 4 hours
-  if (app.isPackaged) {
+  // macOS only — no Windows/Linux release assets are published.
+  if (app.isPackaged && UPDATES_SUPPORTED) {
     setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000)
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000)
   }
