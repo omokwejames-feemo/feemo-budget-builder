@@ -7,7 +7,13 @@ const uid = () => String(++idSeq)
 
 function cellStr(cell: ExcelJS.Cell): string {
   const v = cell.value
-  if (v === null || v === undefined) return ''
+  if (v === null || v === undefined) {
+    const master = (cell as any).master
+    if (master && master !== cell) return cellStr(master)
+    return ''
+  }
+  if (typeof v === 'object' && 'richText' in (v as object))
+    return (v as ExcelJS.CellRichTextValue).richText.map((r: any) => r.text).join('')
   if (typeof v === 'object' && 'result' in (v as object)) return String((v as ExcelJS.CellFormulaValue).result ?? '')
   return String(v)
 }
@@ -62,12 +68,12 @@ export async function parseUploadedBudget(file: File): Promise<ParsedBudget> {
       const col1 = cellStr(row.getCell(1))
       const col2 = row.getCell(2)
       // Total budget
-      if (/total.budget/i.test(col1)) {
+      if (/total.?budget|budget.?total|overall.?budget|gross.?budget|project.?budget|total.?cost|project.?cost/i.test(col1)) {
         const v = cellNum(col2)
         if (v > 0) result.totalBudget = v
       }
       // Title
-      if (/production.title/i.test(col1)) {
+      if (/production.?title|project.?title|film.?title|show.?title|programme.?title|production.?name|project.?name|film.?name|^title$/i.test(col1)) {
         const s = cellStr(col2)
         if (s) result.title = s
       }

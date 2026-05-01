@@ -114,6 +114,7 @@ export const COL_HEADER_PATTERNS = {
   qty:     /\bqty\b|quantity|no\.?\s*of/,
   rate:    /\brate\b|\bprice\b|unit.?cost|cost.?per/,
   unit:    /\bunit\b|\btype\b|measure/,
-  total:   /^total$|line.?total|amount|sub.?total/,
+  total:   /^total$|line.?total|^amount$|sub.?total/,
   schedNo: /sch\.?\s*no|sched|^code$|^ref/,
+  ie:      /^i\/?e$|internal.?external|local.?expat|in.?ex/,
 }

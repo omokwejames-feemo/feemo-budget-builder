@@ -92,7 +92,12 @@ export interface ParsedWorkbook {
 
 function cellStr(cell: ExcelJS.Cell): string {
   const v = cell.value
-  if (v === null || v === undefined) return ''
+  if (v === null || v === undefined) {
+    // Merged cell — read from master rather than returning empty
+    const master = (cell as any).master
+    if (master && master !== cell) return cellStr(master)
+    return ''
+  }
   if (typeof v === 'object' && 'richText' in (v as object))
     return (v as ExcelJS.CellRichTextValue).richText.map(r => r.text).join('')
   if (typeof v === 'object' && 'result' in (v as object))
@@ -283,61 +288,82 @@ function parseAssumptionsSheet(ws: ExcelJS.Worksheet, sheetName: string): Partia
       }
     }
 
+    // Raw (pre-norm) label — needed for abbreviated labels like "V.A.T" that norm() mangles
+    const rawLabel = texts[0].trim().toUpperCase().replace(/\s+/g, ' ')
+
     // Total budget
-    if (!r.totalBudget && /total.?budget|budget.?total/.test(col1)) {
+    if (!r.totalBudget && /total.?budget|budget.?total|overall.?budget|gross.?budget|project.?budget|total.?cost|project.?cost|total.?project/.test(col1)) {
       const v = nums.find(n => n !== null && n > 1000) ?? null
       if (v) r.totalBudget = { value: v, confidence: 'high', source: sheetName }
     }
 
-    // Title
-    if (!r.title && /production.?title|project.?title|film.?title|show.?title/.test(col1)) {
+    // Title — covers "Production Title", "Project Name", "Film Name", "Programme Title", bare "Title"
+    if (!r.title && /production.?title|project.?title|film.?title|show.?title|programme.?title|production.?name|project.?name|film.?name|show.?name|programme.?name|^title$/.test(col1)) {
       const s = col2 || texts[2]?.trim()
       if (s && s.length > 0 && s.length < 150)
         r.title = { value: s, confidence: 'high', source: sheetName }
     }
 
-    // Company
-    if (!r.company && /production.?company|company.?name/.test(col1)) {
+    // Company — covers "Production House", "Client", "Agency", "Brand"
+    if (!r.company && /production.?company|company.?name|production.?house|client.?name|^client$|agency.?name|^agency$|brand.?name/.test(col1)) {
       const s = col2 || texts[2]?.trim()
       if (s && s.length > 0 && s.length < 150)
         r.company = { value: s, confidence: 'high', source: sheetName }
     }
 
-    // Shoot days
-    if (!r.shootDays && /shoot.?day|shooting.?day|camera.?day/.test(col1)) {
+    // Shoot days — covers "No. of Days", "Production Days", "Filming Days", "Days of Shoot"
+    if (!r.shootDays && /shoot.?day|shooting.?day|camera.?day|production.?day|filming.?day|no.?of.?day|number.?of.?day|days.?of.?shoot|^shoot$/.test(col1)) {
       const v = nums.find(n => n !== null && n >= 1 && n <= 365) ?? null
       if (v) r.shootDays = { value: v, confidence: 'high', source: sheetName }
     }
 
-    // Start date
-    if (!r.startDate && /start.?date|production.?start|commencement/.test(col1)) {
+    // Start date — covers "Shoot Date", "Production Date", "Commencement Date"
+    if (!r.startDate && /start.?date|production.?start|commencement|shoot.?date|production.?date|commencement.?date|^start$/.test(col1)) {
       const s = col2 || texts[2]?.trim()
       const d = tryParseDate(s)
       if (d) r.startDate = { value: d.toISOString().split('T')[0], confidence: 'high', source: sheetName }
     }
 
-    // Production fee %
-    if (/production.?fee|producer.?fee|management.?fee/.test(col1)) {
+    // Production fee % — covers "Mgmt Fee", "Prod Fee", "Overhead Fee"
+    if (/production.?fee|producer.?fee|management.?fee|mgmt.?fee|prod.?fee|overhead.?fee/.test(col1)) {
       const pct = extractPercent(row)
       if (pct !== null) r.productionFeePercent = { value: pct, confidence: 'high', source: sheetName }
     }
 
     // Contingency %
-    if (/contingency/.test(col1)) {
+    if (/contingency|reserve.?fund|contingency.?reserve/.test(col1)) {
       const pct = extractPercent(row)
       if (pct !== null) r.contingencyPercent = { value: pct, confidence: 'high', source: sheetName }
     }
 
-    // VAT
-    if (!r.vatRate && /\bvat\b|value.?added.?tax/.test(col1)) {
+    // VAT — rawLabel handles "V.A.T" which norm() turns into "v a t" breaking \bvat\b
+    if (!r.vatRate && (/\bvat\b|value.?added.?tax/.test(col1) || /^V\.?A\.?T\b/.test(rawLabel))) {
       const pct = extractPercent(row)
       if (pct !== null) r.vatRate = { value: pct, confidence: 'high', source: sheetName }
     }
 
-    // WHT
-    if (!r.whtRate && /\bwht\b|withholding/.test(col1)) {
+    // WHT — same fix for "W.H.T"
+    if (!r.whtRate && (/\bwht\b|withholding/.test(col1) || /^W\.?H\.?T\b/.test(rawLabel))) {
       const pct = extractPercent(row)
       if (pct !== null) r.whtRate = { value: pct, confidence: 'high', source: sheetName }
+    }
+
+    // Phase durations — often listed in assumptions as months
+    if (!r.developmentMonths && /development.?month|dev.?month|development.?period|dev.?period/.test(col1)) {
+      const v = nums.find(n => n !== null && n >= 0.5 && n <= 36) ?? null
+      if (v) r.developmentMonths = { value: v, confidence: 'high', source: sheetName }
+    }
+    if (!r.preProdMonths && /pre.?prod.?month|prep.?month|pre.?production.?month|pre.?prod.?period|prep.?period/.test(col1)) {
+      const v = nums.find(n => n !== null && n >= 0.5 && n <= 36) ?? null
+      if (v) r.preProdMonths = { value: v, confidence: 'high', source: sheetName }
+    }
+    if (!r.shootMonths && /shoot.?month|principal.?month|shoot.?period|production.?month/.test(col1)) {
+      const v = nums.find(n => n !== null && n >= 0.5 && n <= 36) ?? null
+      if (v) r.shootMonths = { value: v, confidence: 'high', source: sheetName }
+    }
+    if (!r.postMonths && /post.?prod.?month|post.?month|post.?production.?month|post.?period/.test(col1)) {
+      const v = nums.find(n => n !== null && n >= 0.5 && n <= 36) ?? null
+      if (v) r.postMonths = { value: v, confidence: 'high', source: sheetName }
     }
 
     // Dept allocation % from assumptions sheet
@@ -354,10 +380,10 @@ function parseAssumptionsSheet(ws: ExcelJS.Worksheet, sheetName: string): Partia
 
 // ─── Dynamic column map detection ────────────────────────────────────────────
 
-interface BudgetColMap { detail: number; no: number; qty: number; rate: number; unit: number; total: number }
+interface BudgetColMap { detail: number; no: number; qty: number; rate: number; unit: number; total: number; ie: number }
 
 function detectBudgetColMap(ws: ExcelJS.Worksheet): BudgetColMap {
-  const defaults: BudgetColMap = { detail: 1, no: -1, qty: 2, rate: 3, unit: 4, total: -1 }
+  const defaults: BudgetColMap = { detail: 1, no: -1, qty: 2, rate: 3, unit: 4, total: -1, ie: -1 }
   for (let rn = 1; rn <= 8; rn++) {
     const texts = denseTexts(ws.getRow(rn), 16).map(t => norm(t))
     let hits = 0
@@ -371,6 +397,7 @@ function detectBudgetColMap(ws: ExcelJS.Worksheet): BudgetColMap {
       if (COL_HEADER_PATTERNS.rate.test(t) && map.rate === undefined)      { map.rate = i; hits++ }
       if (COL_HEADER_PATTERNS.unit.test(t) && map.unit === undefined)      { map.unit = i }
       if (COL_HEADER_PATTERNS.total.test(t) && map.total === undefined)    { map.total = i }
+      if (COL_HEADER_PATTERNS.ie.test(t) && map.ie === undefined)          { map.ie = i }
     }
     if (hits >= 2) return { ...defaults, ...map }
   }
@@ -400,7 +427,7 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
     }
 
     // Grand total / total budget row
-    if (!r.totalBudget && /grand.?total|total.?budget|total.?production/.test(col1n)) {
+    if (!r.totalBudget && /grand.?total|total.?budget|total.?production|overall.?budget|gross.?budget|project.?budget|total.?cost|budget.?total/.test(col1n)) {
       const candidates = nums.filter(n => n !== null && (n as number) > 10000) as number[]
       if (candidates.length) {
         r.totalBudget = { value: Math.max(...candidates), confidence: 'high', source: sheetName }
@@ -408,7 +435,7 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
     }
 
     // Title
-    if (!r.title && /production.?title|project.?title|film.?title/.test(col1n)) {
+    if (!r.title && /production.?title|project.?title|film.?title|show.?title|programme.?title|production.?name|project.?name|film.?name|^title$/.test(col1n)) {
       const s = col2 || texts[2]?.trim()
       if (s && s.length < 150) r.title = { value: s, confidence: 'medium', source: sheetName }
     }
@@ -479,6 +506,9 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
       // If colMap.qty === colMap.no (no.of header matched qty pattern), already handled above.
     }
 
+    const ieRaw = colMap.ie >= 0 ? texts[colMap.ie]?.trim().toUpperCase() : ''
+    const ie: 'I' | 'E' = ieRaw === 'E' ? 'E' : 'I'
+
     r.lineItems![currentDept]!.push({
       id: uid(),
       schedNo: schedNo || `${currentDept}${(r.lineItems![currentDept]?.length ?? 0) + 1}`,
@@ -487,7 +517,7 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
       qty: effectiveQty,
       rate: Math.round(effectiveRate),
       unit: unit || 'Flat',
-      ie: 'I',
+      ie,
     })
   })
 
