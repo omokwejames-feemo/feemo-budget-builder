@@ -29,6 +29,9 @@ declare global {
       gdriveAuthorize: () => Promise<{ success: boolean; error?: string }>
       gdriveUpload: (data: string, fileName: string) => Promise<{ success: boolean; timestamp?: string; error?: string }>
       gdriveDisconnect: () => Promise<{ success: boolean }>
+      // Parser fingerprint store
+      parserStoreGet: () => Promise<Record<string, unknown>>
+      parserStoreSet: (fingerprints: Record<string, unknown>) => Promise<{ success: boolean }>
       // Beta session
       sessionLoad: () => Promise<{ key: string; email: string; expiresAt: number } | null>
       sessionSave: (session: { key: string; email: string; expiresAt: number }) => Promise<{ success: boolean }>

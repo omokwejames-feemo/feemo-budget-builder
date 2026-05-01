@@ -14,6 +14,11 @@ import {
   BudgetDocumentType,
   BUDGET_DOC_TYPE_LABELS,
 } from '../utils/budgetParser'
+import { recordCorrection, computeWorkbookFingerprint } from '../utils/parserStore'
+import ExcelJS from 'exceljs'
+import ColumnMapper from '../components/ColumnMapper'
+import { reparseBudgetSheetWithColMap } from '../utils/budgetParser'
+import type { BudgetColMap } from '../utils/budgetParser'
 import { useBudgetStore, DEPARTMENTS, DeptCode } from '../store/budgetStore'
 import BudgetWizard, { WizardExtras } from '../components/BudgetWizard'
 import { WizardErrorBoundary } from '../components/ErrorBoundary'
@@ -282,6 +287,14 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
   const [fallbackParsing, setFallbackParsing] = useState(false)
   const [fallbackError, setFallbackError] = useState('')
 
+  // Option 8: fingerprint of the loaded workbook — used to record user corrections
+  const [workbookFingerprint, setWorkbookFingerprint] = useState<string | null>(null)
+
+  // Option 6: column mapper state
+  const [showColumnMapper, setShowColumnMapper] = useState(false)
+  const [columnMapperSheet, setColumnMapperSheet] = useState('')
+  const [columnMapperReparsing, setColumnMapperReparsing] = useState(false)
+
   // Stage 1: file select on mount
   useEffect(() => { handleFileSelect() }, [])
 
@@ -291,7 +304,14 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
     const res = await window.electronAPI.openXlsxBudget()
     if (!res.success || !res.buffer) { onCancel(); return }
     if (res.filePath) setUploadedFileName(res.filePath.split('/').pop() ?? res.filePath)
-    setFileBuffer(new Uint8Array(res.buffer).buffer)
+    const buf = new Uint8Array(res.buffer).buffer
+    setFileBuffer(buf)
+    // Compute fingerprint early so corrections can be saved if user edits the confirm stage
+    try {
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(buf)
+      setWorkbookFingerprint(computeWorkbookFingerprint(wb))
+    } catch {}
     setUploadFlowStage('page-declaration')
   }
 
@@ -368,6 +388,37 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
 
   function upEdit(key: keyof EditState, value: string) {
     setEdit(prev => prev ? { ...prev, [key]: value } : prev)
+    // Option 8: record user correction for progressive learning
+    if (workbookFingerprint && value) {
+      recordCorrection(workbookFingerprint, key, value).catch(() => {})
+    }
+  }
+
+  // Option 6: handle column mapper correction — re-parse the sheet with user-assigned columns
+  async function handleColumnMapperConfirm(correctedMap: BudgetColMap) {
+    if (!fileBuffer || !pw) return
+    setShowColumnMapper(false)
+    setColumnMapperReparsing(true)
+    try {
+      const { lineItems, deptAllocations } = await reparseBudgetSheetWithColMap(
+        fileBuffer, columnMapperSheet, correctedMap
+      )
+      // Merge re-parsed data back into pw
+      const updated = {
+        ...pw,
+        lineItems:       { ...pw.lineItems, ...lineItems },
+        deptAllocations: { ...pw.deptAllocations, ...deptAllocations },
+        colMaps:         { ...pw.colMaps, [columnMapperSheet]: correctedMap },
+      }
+      setPw(updated)
+      setEdit(toEditState(updated))
+      // Persist the corrected column map for this fingerprint
+      if (workbookFingerprint) {
+        const { storeColMaps } = await import('../utils/parserStore')
+        storeColMaps(workbookFingerprint, { [columnMapperSheet]: correctedMap }).catch(() => {})
+      }
+    } catch {}
+    setColumnMapperReparsing(false)
   }
   function upDeptPct(code: DeptCode, value: string) {
     setEdit(prev => prev ? { ...prev, deptPct: { ...prev.deptPct, [code]: value } } : prev)
@@ -1241,7 +1292,24 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
         {/* ── Section: Line items ─────────────────────────────────────────────── */}
         {section === 'lineitems' && (
           <div>
-            <div style={S.sec}>Line Items by Department</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={S.sec}>Line Items by Department</div>
+              {/* Option 6: Column Mapper — show for any budget-summary sheet */}
+              {pw.sheets.some(s => s.type === 'budget-summary') && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {pw.sheets.filter(s => s.type === 'budget-summary').map(s => (
+                    <button
+                      key={s.name}
+                      onClick={() => { setColumnMapperSheet(s.name); setShowColumnMapper(true) }}
+                      disabled={columnMapperReparsing}
+                      style={{ fontSize: 11, padding: '5px 12px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', color: 'var(--text3)', fontFamily: 'inherit' }}
+                    >
+                      {columnMapperReparsing ? 'Re-parsing…' : `Fix columns: ${s.name}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {lineItemCount === 0 && <p style={{ fontSize: 13, color: 'var(--text3)' }}>No line items detected. Upload a sheet classified as Budget Summary to import them.</p>}
             {DEPARTMENTS.map(dept => {
               const items = pw.lineItems[dept.code]
@@ -1419,6 +1487,17 @@ export default function BudgetUploadScreen({ onDone, onCancel }: Props) {
 
       </div>
     </div>
+
+    {/* Option 6: Column Mapper modal */}
+    {showColumnMapper && fileBuffer && pw && columnMapperSheet && (
+      <ColumnMapper
+        buffer={fileBuffer}
+        sheetName={columnMapperSheet}
+        currentColMap={pw.colMaps[columnMapperSheet] ?? {}}
+        onConfirm={handleColumnMapperConfirm}
+        onClose={() => setShowColumnMapper(false)}
+      />
+    )}
 
     {/* Budget Wizard modal — wrapped in error boundary to prevent app crash */}
     {showWizard && edit && pw && (

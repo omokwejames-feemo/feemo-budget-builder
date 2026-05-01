@@ -1,6 +1,6 @@
-// Intelligent multi-sheet workbook parser — Fix Batch 8 + 9
-// Scans every sheet in a workbook, classifies by content type, runs
-// type-specific parsers, scores confidence, and flags cross-sheet conflicts.
+// Intelligent multi-sheet workbook parser
+// Deep scan: island detection, column inference, formatting signals,
+// cross-sheet reconciliation, and statistical outlier filtering.
 
 import ExcelJS from 'exceljs'
 import type { DeptCode, LineItem, SalaryRole, PaymentSchedule, PaymentScheduleRow } from '../store/budgetStore'
@@ -10,6 +10,11 @@ export type { SheetType, BudgetDocumentType } from './keywords'
 import type { SheetType, BudgetDocumentType } from './keywords'
 import { BUDGET_DOC_TYPE_LABELS } from './keywords'
 export { BUDGET_DOC_TYPE_LABELS }
+import { detectIslands, pickDataIsland, detectOutlierRows } from './islandDetector'
+import type { IslandResult } from './islandDetector'
+import { findStructuralHeaderRow, inferColMapFromFormat, rowIsStructural } from './cellFormatting'
+import { inferColumnRoles, mergeColMaps } from './colInference'
+import { computeWorkbookFingerprint, getStoredColMaps, storeColMaps, getStoredCorrections, applyCorrections } from './parserStore'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -81,6 +86,9 @@ export interface ParsedWorkbook {
     lineItemTotal: number   // total line items extracted across all sheets
     deptCoverage: number   // 0–1 fraction of departments that have any data
   }
+
+  // Column maps derived per sheet (for Option 6 column mapper UI)
+  colMaps: Record<string, Partial<BudgetColMap>>
 
   // Raw buffer retained for targeted fallback re-parsing (Fix Batch 11)
   _rawBuffer?: ArrayBuffer
@@ -380,45 +388,88 @@ function parseAssumptionsSheet(ws: ExcelJS.Worksheet, sheetName: string): Partia
 
 // ─── Dynamic column map detection ────────────────────────────────────────────
 
-interface BudgetColMap { detail: number; no: number; qty: number; rate: number; unit: number; total: number; ie: number }
+export interface BudgetColMap { detail: number; no: number; qty: number; rate: number; unit: number; total: number; ie: number; schedNo: number }
 
-function detectBudgetColMap(ws: ExcelJS.Worksheet): BudgetColMap {
-  const defaults: BudgetColMap = { detail: 1, no: -1, qty: 2, rate: 3, unit: 4, total: -1, ie: -1 }
-  for (let rn = 1; rn <= 8; rn++) {
-    const texts = denseTexts(ws.getRow(rn), 16).map(t => norm(t))
+function detectBudgetColMap(ws: ExcelJS.Worksheet, island?: IslandResult, storedMap?: Partial<BudgetColMap>): BudgetColMap {
+  const defaults: BudgetColMap = { detail: 1, no: -1, qty: 2, rate: 3, unit: 4, total: -1, ie: -1, schedNo: -1 }
+
+  // ── Step 1: keyword header scan (extended to 25 rows, island-bounded) ────
+  const scanStart = island ? island.topRow : 1
+  const scanLimit = island ? Math.min(island.topRow + 19, island.bottomRow) : Math.min(25, ws.rowCount)
+  let keywordMap: Partial<BudgetColMap> = {}
+
+  for (let rn = scanStart; rn <= scanLimit; rn++) {
+    const texts = denseTexts(ws.getRow(rn), 20).map(t => norm(t))
     let hits = 0
-    const map: Partial<BudgetColMap> = {}
+    const rowMap: Partial<BudgetColMap> = {}
     for (let i = 0; i < texts.length; i++) {
       const t = texts[i]
       if (!t) continue
-      if (COL_HEADER_PATTERNS.detail.test(t) && map.detail === undefined)  { map.detail = i; hits++ }
-      if (COL_HEADER_PATTERNS.no.test(t) && map.no === undefined)          { map.no = i }
-      if (COL_HEADER_PATTERNS.qty.test(t) && map.qty === undefined)        { map.qty = i; hits++ }
-      if (COL_HEADER_PATTERNS.rate.test(t) && map.rate === undefined)      { map.rate = i; hits++ }
-      if (COL_HEADER_PATTERNS.unit.test(t) && map.unit === undefined)      { map.unit = i }
-      if (COL_HEADER_PATTERNS.total.test(t) && map.total === undefined)    { map.total = i }
-      if (COL_HEADER_PATTERNS.ie.test(t) && map.ie === undefined)          { map.ie = i }
+      if (COL_HEADER_PATTERNS.detail.test(t) && rowMap.detail === undefined)   { rowMap.detail = i; hits++ }
+      if (COL_HEADER_PATTERNS.no.test(t) && rowMap.no === undefined)           { rowMap.no = i }
+      if (COL_HEADER_PATTERNS.qty.test(t) && rowMap.qty === undefined)         { rowMap.qty = i; hits++ }
+      if (COL_HEADER_PATTERNS.rate.test(t) && rowMap.rate === undefined)       { rowMap.rate = i; hits++ }
+      if (COL_HEADER_PATTERNS.unit.test(t) && rowMap.unit === undefined)       { rowMap.unit = i }
+      if (COL_HEADER_PATTERNS.total.test(t) && rowMap.total === undefined)     { rowMap.total = i }
+      if (COL_HEADER_PATTERNS.ie.test(t) && rowMap.ie === undefined)           { rowMap.ie = i }
+      if (COL_HEADER_PATTERNS.schedNo.test(t) && rowMap.schedNo === undefined) { rowMap.schedNo = i }
     }
-    if (hits >= 2) return { ...defaults, ...map }
+    if (hits >= 2) { keywordMap = rowMap; break }
   }
-  return defaults
+
+  // ── Step 2: cell formatting signals ──────────────────────────────────────
+  let formatMap: Partial<BudgetColMap> = {}
+  if (island) {
+    const hRow = findStructuralHeaderRow(ws, island)
+    if (hRow !== null) formatMap = inferColMapFromFormat(ws, island, hRow)
+  }
+
+  // ── Step 3: data shape inference ─────────────────────────────────────────
+  const dataStart = island
+    ? ((findStructuralHeaderRow(ws, island) ?? island.topRow) + 1)
+    : scanLimit + 1
+  const inferResult = island
+    ? inferColumnRoles(ws, island, dataStart)
+    : { profiles: [], map: {}, confidence: 0 }
+
+  // ── Step 4: merge all four sources (stored map has highest priority) ─────
+  const { map } = mergeColMaps(keywordMap, inferResult, formatMap)
+  return { ...defaults, ...map, ...(storedMap ?? {}) }
 }
 
 // ─── Budget summary parser ────────────────────────────────────────────────────
 
-function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
+function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string, storedColMap?: Partial<BudgetColMap>): Partial<ParsedWorkbook> {
   const r: Partial<ParsedWorkbook> = { lineItems: {}, deptAllocations: {} }
   let currentDept: DeptCode | null = null
-  const colMap = detectBudgetColMap(ws)
 
-  ws.eachRow((row, rowNum) => {
-    const texts = denseTexts(row, 12)
-    const nums = denseNums(row, 12)
-    const col1 = texts[0].trim()
-    const col2 = texts[1].trim()
+  // Island detection — find the main data table, handles sheets with long header blocks
+  const islands = detectIslands(ws, { minRows: 3, minCols: 2, emptyRowTolerance: 3 })
+  const island  = pickDataIsland(islands, 3) ?? undefined
+
+  const colMap = detectBudgetColMap(ws, island, storedColMap)
+
+  // Determine the row range to iterate — use island bounds if detected
+  const iterStart = island ? island.topRow : 1
+  const iterEnd   = island ? island.bottomRow : ws.rowCount
+
+  // Collect total column values per dept section for outlier detection
+  const deptTotalValues: Map<DeptCode, number[]> = new Map()
+  const deptRowIndices:  Map<DeptCode, number[]> = new Map()
+
+  // Pass 1: collect all line item candidates (bounded by island)
+  interface RawItem { rowNum: number; dept: DeptCode; detail: string; no: number; qty: number; rate: number; unit: string; ie: 'I'|'E'; schedNo: string; totalVal: number }
+  const rawItems: RawItem[] = []
+
+  for (let rowNum = iterStart; rowNum <= iterEnd; rowNum++) {
+    const row = ws.getRow(rowNum)
+    const texts = denseTexts(row, 14)
+    const nums  = denseNums(row, 14)
+    const col1  = texts[0].trim()
+    const col2  = texts[1].trim()
     const col1n = norm(col1)
 
-    // Currency
+    // Currency scan (any row)
     if (!r.currency) {
       for (const t of texts) {
         const cur = detectCurrency(t)
@@ -426,12 +477,10 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
       }
     }
 
-    // Grand total / total budget row
+    // Grand total row
     if (!r.totalBudget && /grand.?total|total.?budget|total.?production|overall.?budget|gross.?budget|project.?budget|total.?cost|budget.?total/.test(col1n)) {
       const candidates = nums.filter(n => n !== null && (n as number) > 10000) as number[]
-      if (candidates.length) {
-        r.totalBudget = { value: Math.max(...candidates), confidence: 'high', source: sheetName }
-      }
+      if (candidates.length) r.totalBudget = { value: Math.max(...candidates), confidence: 'high', source: sheetName }
     }
 
     // Title
@@ -440,86 +489,100 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
       if (s && s.length < 150) r.title = { value: s, confidence: 'medium', source: sheetName }
     }
 
-    // Skip header rows
-    if (rowNum <= 4 && /sch|sched|detail|no\.|rate|qty|unit/i.test(col1 + col2)) return
+    // Skip column header rows
+    if (/^(sch\.?no|sched|detail|no\.|rate|qty|unit|i\/e)/i.test(col1 + col2) && (nums.every(n => n === null))) continue
+
+    const positiveNums = nums.filter(n => n !== null && (n as number) > 0) as number[]
+
+    // Structural rows (bold/filled) that aren't data: dept header or total
+    const isStructural = island ? rowIsStructural(ws, rowNum, { left: island.leftCol, right: island.rightCol }) : false
 
     // Department header detection
     const deptCode = matchDept(col1) ?? matchDept(col2)
-    const hasText = (col1.length > 1 || col2.length > 1)
-    const positiveNums = nums.filter(n => n !== null && (n as number) > 0) as number[]
-
-    if (deptCode && hasText) {
+    if (deptCode && (col1.length > 1 || col2.length > 1)) {
       currentDept = deptCode
       if (!r.lineItems![currentDept]) r.lineItems![currentDept] = []
-
-      // If the dept header row itself has a large number → dept total
       if (positiveNums.length > 0) {
         const largest = Math.max(...positiveNums)
-        if (largest > 1000 && !r.deptAllocations![currentDept]) {
+        if (largest > 1000 && !r.deptAllocations![currentDept])
           r.deptAllocations![currentDept] = { value: largest, confidence: 'high', source: sheetName }
-        }
       }
-      return
+      continue
     }
 
-    // Subtotal / total / grand-total rows — never add as line items
+    // Subtotal / total rows — extract dept total but skip as line item
     if (/^(total|subtotal|sub.?total|dept.?target|dept.?total|grand.?total|below.?the.?line|above.?the.?line)/.test(col1n)
-      || /^(total|subtotal|grand)/.test(norm(col2))) {
+      || /^(total|subtotal|grand)/.test(norm(col2))
+      || (isStructural && positiveNums.length <= 2 && positiveNums.length > 0)) {
       if (currentDept && !r.deptAllocations![currentDept] && positiveNums.length) {
         const largest = Math.max(...positiveNums)
-        if (largest > 1000)
-          r.deptAllocations![currentDept] = { value: largest, confidence: 'high', source: sheetName }
+        if (largest > 1000) r.deptAllocations![currentDept] = { value: largest, confidence: 'high', source: sheetName }
       }
-      return
+      continue
     }
 
-    if (!currentDept) return
+    if (!currentDept) continue
 
-    // Skip header-like rows
     const detail = col2 || col1
-    if (!detail || detail.length < 2) return
-    if (/^(sch\.?no|sched|detail|no\.|rate|qty|unit|i\/e|grand.?total|below.?the.?line|above.?the.?line|sub.?total|\d+\.\s*$)/i.test(detail)) return
+    if (!detail || detail.length < 2) continue
+    if (/^(sch\.?no|sched|detail|no\.|rate|qty|unit|i\/e|grand.?total|below.?the.?line|above.?the.?line|sub.?total|\d+\.\s*$)/i.test(detail)) continue
 
-    // Extract line item values
     const largeNums = positiveNums.filter(n => n > 10)
-    if (!largeNums.length) return
+    if (!largeNums.length) continue
 
-    // Use detected column map — fall back to largest number for total
-    const total = colMap.total >= 0 && nums[colMap.total] !== null
-      ? (nums[colMap.total] as number)
-      : Math.max(...largeNums)
-    const schedNo = col1.length > 0 && col1.length <= 6 && !/^[a-z]/i.test(col1) ? col1 : ''
-    const noRaw  = (colMap.no >= 0 ? (nums[colMap.no] ?? null) : null) as number | null
-    const qty = (nums[colMap.qty] ?? nums[colMap.qty + 1] ?? null) as number | null
-    const rate = (nums[colMap.rate] ?? nums[colMap.rate + 1] ?? null) as number | null
-    const unit = (texts[colMap.unit] || texts[colMap.unit + 1] || 'Flat').slice(0, 20)
+    const totalVal = colMap.total >= 0 && nums[colMap.total] !== null
+      ? (nums[colMap.total] as number) : Math.max(...largeNums)
+    const schedNoRaw = colMap.schedNo >= 0 && texts[colMap.schedNo]
+      ? texts[colMap.schedNo] : (col1.length > 0 && col1.length <= 6 && !/^[a-z]/i.test(col1) ? col1 : '')
+    const noRaw  = (colMap.no   >= 0 ? nums[colMap.no]   : null) as number | null
+    const qty    = (colMap.qty  >= 0 ? nums[colMap.qty]  : null) as number | null
+    const rate   = (colMap.rate >= 0 ? nums[colMap.rate] : null) as number | null
+    const unit   = (texts[colMap.unit] || 'Flat').slice(0, 20)
+    const ieRaw  = colMap.ie >= 0 ? texts[colMap.ie]?.trim().toUpperCase() : ''
 
-    const effectiveRate = (rate && rate > 0 && rate !== total) ? rate : total
-    const effectiveQty = (qty && qty > 0 && qty < 5000 && qty !== total) ? qty : 1
-
-    // If an explicit No. column was detected, use it; otherwise check if two small
-    // integers exist (both < 500) that might have been conflated — smaller → no, larger → qty.
-    let effectiveNo = noRaw && noRaw > 0 && noRaw < 500 && noRaw !== total ? noRaw : 1
-    if (colMap.no < 0 && effectiveNo === 1) {
-      // No explicit No. column: if qty looks like a count (≤20) and we have other
-      // small integers that look like duration, leave as-is (no correction needed).
-      // If colMap.qty === colMap.no (no.of header matched qty pattern), already handled above.
-    }
-
-    const ieRaw = colMap.ie >= 0 ? texts[colMap.ie]?.trim().toUpperCase() : ''
-    const ie: 'I' | 'E' = ieRaw === 'E' ? 'E' : 'I'
-
-    r.lineItems![currentDept]!.push({
-      id: uid(),
-      schedNo: schedNo || `${currentDept}${(r.lineItems![currentDept]?.length ?? 0) + 1}`,
+    rawItems.push({
+      rowNum,
+      dept: currentDept,
       detail: detail.slice(0, 80),
-      no: effectiveNo,
-      qty: effectiveQty,
-      rate: Math.round(effectiveRate),
-      unit: unit || 'Flat',
-      ie,
+      no:    noRaw && noRaw > 0 && noRaw < 500 && noRaw !== totalVal ? noRaw : 1,
+      qty:   qty   && qty   > 0 && qty   < 5000 && qty   !== totalVal ? qty   : 1,
+      rate:  Math.round(rate && rate > 0 && rate !== totalVal ? rate : totalVal),
+      unit:  unit || 'Flat',
+      ie:    ieRaw === 'E' ? 'E' : 'I',
+      schedNo: schedNoRaw,
+      totalVal,
     })
-  })
+
+    // Track values per dept for outlier detection
+    if (!deptTotalValues.has(currentDept)) { deptTotalValues.set(currentDept, []); deptRowIndices.set(currentDept, []) }
+    deptTotalValues.get(currentDept)!.push(totalVal)
+    deptRowIndices.get(currentDept)!.push(rawItems.length - 1)
+  }
+
+  // Pass 2: Option 7 — outlier detection per dept, filter subtotals missed by keyword scan
+  const outlierSet = new Set<number>()
+  for (const [dept, values] of deptTotalValues.entries()) {
+    const indices = deptRowIndices.get(dept)!
+    const outliers = detectOutlierRows(values, { multiplier: 4, minMedian: 500 })
+    for (const oi of outliers) outlierSet.add(indices[oi])
+  }
+
+  // Pass 3: commit non-outlier items to result
+  for (let i = 0; i < rawItems.length; i++) {
+    if (outlierSet.has(i)) continue
+    const item = rawItems[i]
+    if (!r.lineItems![item.dept]) r.lineItems![item.dept] = []
+    r.lineItems![item.dept]!.push({
+      id: uid(),
+      schedNo: item.schedNo || `${item.dept}${(r.lineItems![item.dept]?.length ?? 0) + 1}`,
+      detail:  item.detail,
+      no:      item.no,
+      qty:     item.qty,
+      rate:    item.rate,
+      unit:    item.unit,
+      ie:      item.ie,
+    })
+  }
 
   return r
 }
@@ -529,14 +592,22 @@ function parseBudgetSummarySheet(ws: ExcelJS.Worksheet, sheetName: string): Part
 function parseSalaryForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
   const r: Partial<ParsedWorkbook> = { salaryRoles: [] }
 
+  // Island detection — locate the data table, skip header branding blocks
+  const islands = detectIslands(ws, { minRows: 3, minCols: 3, emptyRowTolerance: 2 })
+  const island  = pickDataIsland(islands, 3) ?? undefined
+
+  const scanTop    = island ? island.topRow : 1
+  const scanBottom = island ? island.bottomRow : ws.rowCount
+  // Expand scan range to 25 rows to handle sheets with long intro blocks
+  const scanLimit = Math.min(scanTop + 24, scanBottom)
+
   let monthHeaderRow = -1
   let monthColStart = -1
   let monthColEnd = -1
 
-  // Scan first 6 rows for month header
-  for (let rowNum = 1; rowNum <= 6; rowNum++) {
+  for (let rowNum = scanTop; rowNum <= scanLimit; rowNum++) {
     const row = ws.getRow(rowNum)
-    for (let c = 2; c <= 24; c++) {
+    for (let c = 2; c <= 28; c++) {
       const t = norm(cellStr(row.getCell(c)))
       if (/^(month|m\d+|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{4})/.test(t)) {
         monthHeaderRow = rowNum
@@ -549,7 +620,7 @@ function parseSalaryForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Par
 
   if (monthColStart > 0) {
     const hRow = ws.getRow(monthHeaderRow)
-    for (let c = monthColStart + 1; c <= 36; c++) {
+    for (let c = monthColStart + 1; c <= 40; c++) {
       const t = norm(cellStr(hRow.getCell(c)))
       if (/total|sum|grand/.test(t)) { monthColEnd = c - 1; break }
       if (t.length > 0) monthColEnd = c
@@ -559,15 +630,16 @@ function parseSalaryForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Par
 
   if (monthColEnd < monthColStart) monthColEnd = monthColStart + 11 // fallback 12 months
 
-  ws.eachRow((row, rowNum) => {
-    if (rowNum <= Math.max(monthHeaderRow, 2)) return
+  const dataStart = monthHeaderRow > 0 ? monthHeaderRow + 1 : (island ? island.topRow + 1 : 3)
 
+  for (let rowNum = dataStart; rowNum <= scanBottom; rowNum++) {
+    const row = ws.getRow(rowNum)
     const texts = denseTexts(row, Math.max(monthColEnd + 2, 14))
     const col1 = texts[0].trim()
     const col2 = texts[1].trim()
     const roleText = col2 || col1
-    if (!roleText || roleText.length < 2) return
-    if (/^(total|subtotal|cumulative|grand|role|name|position|#|no\.|department)/i.test(roleText)) return
+    if (!roleText || roleText.length < 2) continue
+    if (/^(total|subtotal|cumulative|grand|role|name|position|#|no\.|department)/i.test(roleText)) continue
 
     const deptCode = matchDept(col1) ?? matchDept(col2) ?? null
 
@@ -585,7 +657,7 @@ function parseSalaryForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Par
       }
     }
 
-    if (Object.keys(monthlyAmounts).length === 0) return
+    if (Object.keys(monthlyAmounts).length === 0) continue
 
     r.salaryRoles!.push({
       id: uid(),
@@ -595,7 +667,7 @@ function parseSalaryForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Par
       phase: 'all',
       monthlyAmounts,
     })
-  })
+  }
 
   return r
 }
@@ -605,13 +677,21 @@ function parseSalaryForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Par
 function parseProductionForecastSheet(ws: ExcelJS.Worksheet, sheetName: string): Partial<ParsedWorkbook> {
   const r: Partial<ParsedWorkbook> = { forecastRows: [] }
 
+  // Island detection
+  const islands = detectIslands(ws, { minRows: 3, minCols: 3, emptyRowTolerance: 2 })
+  const island  = pickDataIsland(islands, 3) ?? undefined
+
+  const scanTop    = island ? island.topRow : 1
+  const scanBottom = island ? island.bottomRow : ws.rowCount
+  const scanLimit  = Math.min(scanTop + 24, scanBottom)
+
   let monthHeaderRow = -1
   let monthColStart = -1
   let monthColEnd = -1
 
-  for (let rowNum = 1; rowNum <= 6; rowNum++) {
+  for (let rowNum = scanTop; rowNum <= scanLimit; rowNum++) {
     const row = ws.getRow(rowNum)
-    for (let c = 1; c <= 28; c++) {
+    for (let c = 1; c <= 32; c++) {
       const t = norm(cellStr(row.getCell(c)))
       if (/^(month|m\d+|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{4})/.test(t)) {
         monthHeaderRow = rowNum; monthColStart = c; break
@@ -622,7 +702,7 @@ function parseProductionForecastSheet(ws: ExcelJS.Worksheet, sheetName: string):
 
   if (monthColStart > 0) {
     const hRow = ws.getRow(monthHeaderRow)
-    for (let c = monthColStart + 1; c <= 36; c++) {
+    for (let c = monthColStart + 1; c <= 40; c++) {
       const t = norm(cellStr(hRow.getCell(c)))
       if (/total|sum|cumul/.test(t) && c > monthColStart) { monthColEnd = c - 1; break }
       if (t.length > 0) monthColEnd = c
@@ -632,13 +712,15 @@ function parseProductionForecastSheet(ws: ExcelJS.Worksheet, sheetName: string):
 
   if (monthColStart < 0 || monthColEnd < monthColStart) return r
 
-  ws.eachRow((row, rowNum) => {
-    if (rowNum <= monthHeaderRow) return
-    const col1 = cellStr(row.getCell(1)).trim()
-    const col2 = cellStr(row.getCell(2)).trim()
+  const dataStart = monthHeaderRow + 1
+
+  for (let rowNum = dataStart; rowNum <= scanBottom; rowNum++) {
+    const row = ws.getRow(rowNum)
+    const col1 = cellStr(row.getCell(island?.leftCol ?? 1)).trim()
+    const col2 = cellStr(row.getCell(island ? island.leftCol + 1 : 2)).trim()
     const label = col1 || col2
-    if (!label) return
-    if (/^(total|cumulative|grand|running)/i.test(label)) return
+    if (!label) continue
+    if (/^(total|cumulative|grand|running)/i.test(label)) continue
 
     const deptCode = matchDept(label)
     const monthlyValues: Record<number, number> = {}
@@ -648,7 +730,7 @@ function parseProductionForecastSheet(ws: ExcelJS.Worksheet, sheetName: string):
     }
     if (Object.keys(monthlyValues).length > 0)
       r.forecastRows!.push({ label, deptCode, monthlyValues })
-  })
+  }
 
   return r
 }
@@ -817,6 +899,7 @@ function mergeResults(parts: Partial<ParsedWorkbook>[], sheets: SheetClassificat
     conflicts: [], sheets, warnings: [],
     documentType: 'unknown',
     matchStats: { lineItemTotal: 0, deptCoverage: 0 },
+    colMaps: {},
   }
 
   for (const key of SCALAR_KEYS) {
@@ -854,6 +937,77 @@ function mergeResults(parts: Partial<ParsedWorkbook>[], sheets: SheetClassificat
   }
 
   return result
+}
+
+// ─── Option 4: Cross-sheet reconciliation ────────────────────────────────────
+// Compares totals derived from line items vs dept allocation amounts.
+// When they agree (within 5%) the allocation confidence is upgraded to 'high'.
+// When they disagree significantly, a warning is added so the UI can surface it.
+
+function reconcileSheets(result: ParsedWorkbook): void {
+  for (const dept of DEPARTMENTS) {
+    const code = dept.code as DeptCode
+    const items = result.lineItems[code] ?? []
+    if (items.length === 0) continue
+
+    // Sum: no × qty × rate for each line item
+    const lineTotal = items.reduce((sum, li) => sum + li.no * li.qty * li.rate, 0)
+    if (lineTotal <= 0) continue
+
+    const alloc = result.deptAllocations[code]
+    if (!alloc) {
+      // No allocation yet — derive it from line items
+      result.deptAllocations[code] = {
+        value: Math.round(lineTotal),
+        confidence: 'medium',
+        source: 'line-item-sum',
+      }
+      continue
+    }
+
+    const diff = Math.abs(alloc.value - lineTotal) / Math.max(alloc.value, lineTotal)
+
+    if (diff <= 0.05) {
+      // Within 5% tolerance — cross-validates, upgrade confidence
+      result.deptAllocations[code] = { ...alloc, confidence: 'high' }
+    } else if (diff <= 0.15) {
+      // Minor discrepancy — keep allocation but note it
+      result.warnings.push(
+        `${dept.name}: line-item sum (${Math.round(lineTotal).toLocaleString()}) differs ${(diff * 100).toFixed(1)}% from sheet allocation (${alloc.value.toLocaleString()}).`
+      )
+    } else {
+      // Large discrepancy — prefer the larger value and downgrade confidence
+      const larger = lineTotal > alloc.value ? lineTotal : alloc.value
+      const src    = lineTotal > alloc.value ? 'line-item-sum' : alloc.source
+      result.deptAllocations[code] = { value: Math.round(larger), confidence: 'low', source: src }
+      result.warnings.push(
+        `${dept.name}: large mismatch — line-item sum ${Math.round(lineTotal).toLocaleString()} vs allocation ${alloc.value.toLocaleString()} (${(diff * 100).toFixed(0)}% gap). Using larger figure.`
+      )
+    }
+  }
+
+  // If we still have no totalBudget, derive it from dept allocations
+  if (!result.totalBudget) {
+    const allocTotal = Object.values(result.deptAllocations).reduce((s, sf) => s + (sf?.value ?? 0), 0)
+    if (allocTotal > 10000) {
+      result.totalBudget = { value: Math.round(allocTotal), confidence: 'medium', source: 'dept-alloc-sum' }
+    }
+  }
+
+  // Also reconcile salary totals against dept allocations
+  const salaryByDept: Partial<Record<DeptCode, number>> = {}
+  for (const role of result.salaryRoles) {
+    const total = Object.values(role.monthlyAmounts).reduce((s, v) => s + v, 0)
+    salaryByDept[role.deptCode] = (salaryByDept[role.deptCode] ?? 0) + total
+  }
+
+  for (const [code, salTotal] of Object.entries(salaryByDept) as [DeptCode, number][]) {
+    if (!salTotal) continue
+    const alloc = result.deptAllocations[code]
+    if (!alloc) {
+      result.deptAllocations[code] = { value: Math.round(salTotal), confidence: 'low', source: 'salary-sum' }
+    }
+  }
 }
 
 // ─── Cross-sheet conflict detection ──────────────────────────────────────────
@@ -929,9 +1083,17 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedWork
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(buffer)
 
+  // Option 5: check fingerprint store for known column maps from prior imports
+  const fingerprint = computeWorkbookFingerprint(wb)
+  const [storedColMapsData, storedCorrections] = await Promise.all([
+    getStoredColMaps(fingerprint),
+    getStoredCorrections(fingerprint),
+  ])
+
   const sheets: SheetClassification[] = []
   const parts: Partial<ParsedWorkbook>[] = []
   const unclassified: string[] = []
+  const derivedColMaps: Record<string, Partial<BudgetColMap>> = {}
 
   for (const ws of wb.worksheets) {
     if (!ws.rowCount || ws.rowCount < 2) continue
@@ -940,16 +1102,23 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedWork
     sheets.push(classification)
 
     let part: Partial<ParsedWorkbook> = {}
+    const storedMap = storedColMapsData?.[ws.name] ?? undefined
 
     switch (classification.type) {
-      case 'assumptions':     part = parseAssumptionsSheet(ws, ws.name); break
-      case 'dept-allocations':part = parseAssumptionsSheet(ws, ws.name); break
-      case 'budget-summary':  part = parseBudgetSummarySheet(ws, ws.name); break
-      case 'salary-forecast': part = parseSalaryForecastSheet(ws, ws.name); break
+      case 'assumptions':         part = parseAssumptionsSheet(ws, ws.name); break
+      case 'dept-allocations':    part = parseAssumptionsSheet(ws, ws.name); break
+      case 'budget-summary': {
+        part = parseBudgetSummarySheet(ws, ws.name, storedMap)
+        // Capture column map for fingerprint storage
+        const island = pickDataIsland(detectIslands(ws, { minRows: 3, minCols: 2, emptyRowTolerance: 3 }), 3) ?? undefined
+        derivedColMaps[ws.name] = detectBudgetColMap(ws, island, storedMap)
+        break
+      }
+      case 'salary-forecast':     part = parseSalaryForecastSheet(ws, ws.name); break
       case 'production-forecast': part = parseProductionForecastSheet(ws, ws.name); break
       case 'production-timeline': part = parseProductionTimelineSheet(ws, ws.name); break
-      case 'payment-schedule': part = parsePaymentScheduleSheet(ws, ws.name); break
-      case 'unknown':         unclassified.push(ws.name); break
+      case 'payment-schedule':    part = parsePaymentScheduleSheet(ws, ws.name); break
+      case 'unknown':             unclassified.push(ws.name); break
     }
 
     if (Object.keys(part).length > 0) parts.push(part)
@@ -976,9 +1145,44 @@ export async function parseBudgetBuffer(buffer: ArrayBuffer): Promise<ParsedWork
   }
 
   result.documentType = detectDocumentType(result)
+  reconcileSheets(result)    // Option 4: cross-sheet math validation + confidence upgrades
   detectConflicts(result)
+
+  // Attach column maps to result (Option 6: column mapper UI can display these)
+  result.colMaps = derivedColMaps
+
+  // Option 5: persist derived column maps for future imports of the same template
+  if (Object.keys(derivedColMaps).length > 0) {
+    storeColMaps(fingerprint, derivedColMaps).catch(() => {})  // fire-and-forget
+  }
+
+  // Option 8: apply stored user corrections (overrides inferred values)
+  if (Object.keys(storedCorrections).length > 0) {
+    applyCorrections(result as unknown as Record<string, unknown>, storedCorrections)
+  }
+
   result._rawBuffer = buffer   // retain for targeted fallback re-parsing
   return result
+}
+
+// ─── Re-parse budget sheet with user-corrected column map ────────────────────
+// Used by the Column Mapper UI (Option 6) when the user adjusts column roles.
+
+export async function reparseBudgetSheetWithColMap(
+  buffer: ArrayBuffer,
+  sheetName: string,
+  correctedColMap: BudgetColMap
+): Promise<Pick<ParsedWorkbook, 'lineItems' | 'deptAllocations'>> {
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer)
+  const ws = wb.getWorksheet(sheetName)
+  if (!ws || ws.rowCount < 2) return { lineItems: {}, deptAllocations: {} }
+
+  const part = parseBudgetSummarySheet(ws, sheetName, correctedColMap)
+  return {
+    lineItems:      part.lineItems      ?? {},
+    deptAllocations: part.deptAllocations ?? {},
+  }
 }
 
 // ─── Single-sheet re-parser for fallback dialog ───────────────────────────────

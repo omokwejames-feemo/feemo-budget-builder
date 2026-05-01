@@ -122,4 +122,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('gdrive-upload', { data, fileName }),
   gdriveDisconnect: () =>
     ipcRenderer.invoke('gdrive-disconnect'),
+
+  // ── Parser fingerprint store ──────────────────────────────────────────────
+  parserStoreGet: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke('parser-store-get'),
+  parserStoreSet: (fingerprints: Record<string, unknown>): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('parser-store-set', fingerprints),
 })

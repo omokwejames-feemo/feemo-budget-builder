@@ -990,6 +990,25 @@ ipcMain.handle('restart-app', () => {
   setImmediate(() => { app.relaunch(); app.exit(0) })
 })
 
+// ── Parser fingerprint store ──────────────────────────────────────────────────
+// Persists column-map fingerprints and user corrections across sessions so the
+// parser can recognise repeat file formats without rescanning from scratch.
+
+interface ParserStoreSchema { fingerprints: Record<string, unknown> }
+const parserStore = new ElectronStore<ParserStoreSchema>({
+  name: 'feemo-parser',
+  defaults: { fingerprints: {} },
+})
+
+ipcMain.handle('parser-store-get', () => {
+  return parserStore.get('fingerprints') ?? {}
+})
+
+ipcMain.handle('parser-store-set', (_event, fingerprints: Record<string, unknown>) => {
+  parserStore.set('fingerprints', fingerprints)
+  return { success: true }
+})
+
 // ── Uncaught exception handlers ───────────────────────────────────────────────
 
 process.on('uncaughtException', async (err) => {
